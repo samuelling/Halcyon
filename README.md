@@ -31,3 +31,17 @@ contract (`frame()`, `events()`); `harness/run.mjs` renders runs for BOLDBLASTER
 - Characters: Soldier.glb and Michelle.glb from the three.js examples (Mixamo characters, free to
   use in games under Adobe's Mixamo terms; not CC0)
 - Engine: [three.js](https://threejs.org) (MIT)
+
+## What the first hour showed (BOLDBLASTER round 11)
+
+Twelve 5-minute bot runs, every model refitted against simulated brains:
+- **Worked:** navigation and spatial memory were the best of any game tested (boundary distance
+  .97, grid orientation .65, place forgetting from BOLD .90), and the puzzles are recoverable from
+  behaviour (map updating .63, path-integration distance gain .82, stair learning rate .58).
+- **Didn't:** decisions from BOLD. Each person in a group became a separate call, so calls came
+  2.8 s apart and drift diffusion and value learning were unreadable from BOLD. Blackouts took 20%
+  of the hour and the dim interior cost contrast tuning.
+- **Next tuning:** one call per group at least 6 s apart, more and shorter stair trips with an
+  outcome on every landing, shorter blackouts ending at a stairwell, more time on the terrace.
+
+Details: README and dashboard (Experiment 10) in samuelling/BOLDBLASTER.
