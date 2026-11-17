@@ -23,9 +23,15 @@ for (let k = 0; k < 20; k++) await pg.evaluate(() => window.H.frame());   // war
 const img = fs.openSync(`${pre}_lum.u16`, 'w'), log = fs.openSync(`${pre}_log.jsonl`, 'w');
 const t0 = Date.now();
 await pg.evaluate(() => { const e = window.H.events(); for (const k in e) if (Array.isArray(e[k])) e[k].length = 0; });
-let tOff = null;
+let tOff = null, prevImg = null, prevRec = null, frozen = 0;
 for (let f = 0; f < nf; f++) {
-  const { img: b64, rec } = await pg.evaluate(() => window.H.frame());
+  const { img: b64, rec, lost } = await pg.evaluate(() => { const r = window.H.frame(); r.lost = window.HX.renderer.getContext().isContextLost(); return r; });
+  if (lost) { console.log(`run ${ri} frame ${f}: WebGL context lost`); process.exit(3); }
+  // a frozen canvas: the image stops changing while the player moves or turns
+  if (prevImg !== null && b64 === prevImg && (Math.abs(rec.yaw - prevRec.yaw) > 0.01 || Math.hypot(rec.x - prevRec.x, rec.z - prevRec.z) > 0.05)) {
+    if (++frozen > 20) { console.log(`run ${ri} frame ${f}: canvas frozen`); process.exit(4); }
+  } else frozen = 0;
+  prevImg = b64; prevRec = rec;
   if (tOff === null) tOff = rec.t - 0.1;
   fs.writeSync(img, Buffer.from(b64, 'base64'));
   fs.writeSync(log, JSON.stringify(rec) + '\n');

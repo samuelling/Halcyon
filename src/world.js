@@ -7,6 +7,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
+import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as P from './plan.js';
 
 const { C, NX, NZ, LH, CEIL, X0, Z0, cx, cz } = P;
@@ -506,6 +508,8 @@ function buildExterior(scene, root, env) {
 // [model, L, x, z, rotY, y?, scale?]. Collision circles for the big ones.
 export const OBSTACLES = [];   // {L, x, z, r}
 export const BULBS = {};
+export const PROPS = [];   // {m, L, open}: instanced prop meshes by floor
+export function propVisibility(L) { for (const p of PROPS) p.m.visible = p.open || p.L === L; }
 async function placeProps(scene, root, onProgress) {
   const loader = new GLTFLoader();
   const place = [];   // [name, L, x, z, rot, y, scale, collideR]
@@ -591,29 +595,55 @@ async function placeProps(scene, root, onProgress) {
   const gl = {};
   let nDone = 0;
   await Promise.all(names.map(async (n) => { gl[n] = await loader.loadAsync(`${ASSET}models/${n}/${n}.gltf`); onProgress(`props ${++nDone}/${names.length}`); }));
+  // instanced per model, per floor, and per whether the room is open to the atrium (lobby, galleries):
+  // props on another floor behind walls are hidden while you aren't on it (see propVisibility)
+  const OPEN = new Set(['lobby', 'gallery']);
   const groups = new Map();
-  for (const q of place) { if (!groups.has(q[0])) groups.set(q[0], []); groups.get(q[0]).push(q); }
+  for (const q of place) {
+    const r = P.roomAt(q[1], P.ci(q[2]), P.ck(q[3])), open = r < 0 || OPEN.has(P.ROOMS[r].kind) || /Chandelier_01/.test(q[0]);
+    const key = `${q[0]}|${q[1]}|${open ? 1 : 0}`;
+    if (!groups.has(key)) groups.set(key, []); groups.get(key).push(q);
+  }
+  // heavy scanned meshes are decimated once, to a budget per mesh (the instancing multiplies them)
+  const simp = new SimplifyModifier(), slim = new Map();
+  const lighten = async (geo, budget) => {
+    if (slim.has(geo)) return slim.get(geo);
+    const tris = (geo.index ? geo.index.count : geo.attributes.position.count) / 3;
+    let out = geo;
+    if (tris > budget) {
+      try {
+        const g2 = mergeVertices(geo.index ? geo : geo, 1e-4);
+        const nv = g2.attributes.position.count, keep = Math.max(150, Math.round(nv * budget / tris));
+        out = await simp.modify(g2, nv - keep); out.computeVertexNormals();
+      } catch (e) { out = geo; }
+    }
+    slim.set(geo, out); return out;
+  };
   // simple beds (box mattress, headboard): procedural, fabric textured
   const tl = new THREE.TextureLoader();
   const bedM = surfMat(tl, 'quatrefoil_jacquard_fabric', { color: 0xe8e0d0 });
-  for (const [n, list] of groups) {
+  for (const [key, list] of groups) {
+    const [n, Ls, open] = key.split('|');
+    const before = root.children.length;
     if (n === '__bed') {
       const g = new THREE.BoxGeometry(1.7, 0.55, 2.1); g.translate(0, 0.38, 0);
       const hb = new THREE.BoxGeometry(1.8, 1.1, 0.12); hb.translate(0, 0.6, -1.05);
       const bm = patch(bedM.clone(), 'instance');
       const hm = patch(new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.6 }), 'instance');
       for (const [geo, mat] of [[g, bm], [hb, hm]]) addInstanced(root, geo, mat, list, new THREE.Matrix4());
+      for (const m of root.children.slice(before)) PROPS.push({ m, L: +Ls, open: open === '1' });
       continue;
     }
     const scn = gl[n].scene; scn.updateMatrixWorld(true);
     const bb = new THREE.Box3().setFromObject(scn);
     const hang = /lamp|Chandelier/.test(n) && !/sconce/.test(n), wall = /frame|mirror|clock|lifebuoy|sconce/.test(n);
     const off = new THREE.Matrix4().makeTranslation(0, hang ? -bb.max.y : wall ? -(bb.min.y + bb.max.y) / 2 : -bb.min.y, 0);
-    scn.traverse((o) => {
-      if (!o.isMesh) return;
+    const meshes = []; scn.traverse((o) => { if (o.isMesh) meshes.push(o); });
+    for (const o of meshes) {
       const mat = o.material.clone(); patch(mat, 'instance');
-      addInstanced(root, o.geometry, mat, list, off.clone().multiply(o.matrixWorld));
-    });
+      addInstanced(root, await lighten(o.geometry, /lamp|sconce|globe/.test(n) ? 400 : 1600), mat, list, off.clone().multiply(o.matrixWorld));
+    }
+    for (const m of root.children.slice(before)) PROPS.push({ m, L: +Ls, open: open === '1' });
   }
   for (const q of place) if (q[7] > 0) OBSTACLES.push({ L: q[1], x: q[2], z: q[3], r: q[7] * (q[6] || 1) });
 }

@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as P from './plan.js';
-import { los, lightAt, OBSTACLES, BULBS, patch, U, mulberry } from './world.js';
+import { los, lightAt, OBSTACLES, BULBS, patch, U, mulberry, propVisibility } from './world.js';
 
 const { C, LH, X0, Z0 } = P;
 const EYE = 1.62, RAD = 0.3;
@@ -264,6 +264,7 @@ export class Game {
     this.flashSprite.material.opacity = Math.min(1, this.flash.intensity / 20); this.flashSprite.rotation.z = this.t * 37;
     this.viewScene.environment = this.scene.environment; this.viewScene.environmentIntensity = 0.25 * (0.3 + 0.7 * U.uPower.value);
     this.animateDoors(dt);
+    if (p.L !== this.propL) { propVisibility(p.L); this.propL = p.L; }
     // camera
     const cam = this.camera, H = this.human, sp = Math.hypot(p.vel.x, p.vel.z);
     p.ads += ((inp.ads && p.reloadT < 0 ? 1 : 0) - p.ads) * Math.min(1, dt * 12);
