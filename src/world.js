@@ -60,11 +60,13 @@ export function patch(mat, mode = 'vertex', objU = null) {
   return mat;
 }
 
-const texCache = new Map();
+const texCache = new Map(), texPending = [];
+export const texturesReady = () => Promise.all(texPending);
 function tex(loader, name, kind, srgb) {
   const key = name + kind;
   if (!texCache.has(key)) {
-    const t = loader.load(`${ASSET}textures/${name}/${kind}.jpg`);
+    let done; texPending.push(new Promise((r) => { done = r; }));
+    const t = loader.load(`${ASSET}textures/${name}/${kind}.jpg`, done, undefined, done);
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     texCache.set(key, t);
@@ -459,6 +461,7 @@ export async function buildWorld(scene, renderer, onProgress = () => {}) {
   Object.assign(sun.shadow.camera, { left: -42, right: 42, top: 42, bottom: -42, near: 10, far: 170 });
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.035; sun.shadow.radius = 3;
   scene.add(sun, sun.target);
+  sun.visible = renderer.shadowMap.enabled;   // without its shadows the sun would shine through the floors: leave it to the bake
   root.traverse((o) => { if (o.isMesh) { const glass = o.material && o.material.transparent; o.castShadow = !glass; o.receiveShadow = true; } });
   onProgress('sky');
   // ---------------------------------------------------------------- fixtures and props
@@ -472,7 +475,7 @@ export async function buildWorld(scene, renderer, onProgress = () => {}) {
 function buildExterior(scene, root, env) {
   const tl = new THREE.TextureLoader();
   const ground = (name, w, d, x, z, rep, y = -0.02) => {
-    const mk = (kind, srgb) => { const t = tl.load(`${ASSET}textures/${name}/${kind}.jpg`); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(w / rep, d / rep); t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+    const mk = (kind, srgb) => { let done; texPending.push(new Promise((r) => { done = r; })); const t = tl.load(`${ASSET}textures/${name}/${kind}.jpg`, done, undefined, done); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(w / rep, d / rep); t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
     const m = patch(new THREE.MeshStandardMaterial({ map: mk('diff', true), normalMap: mk('nor'), roughnessMap: mk('rough'), roughness: 1, envMapIntensity: 0.5 }), 'object', { value: new THREE.Vector2(0, 1.0) });
     const g = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m); g.rotation.x = -Math.PI / 2; g.position.set(x, y, z); root.add(g); return g;
   };

@@ -15,7 +15,7 @@ const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', head
            : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox', '--mute-audio'] });
 const pg = await b.newPage({ viewport: { width: 384, height: 288 }, deviceScaleFactor: 1 });
 pg.on('pageerror', (e) => console.log('[err]', e.message.slice(0, 300)));
-await pg.goto(`http://localhost:${PORT}/index.html?bot=1&q=low&msaa=0&seed=${1000 + ri}`, { waitUntil: 'load', timeout: 300000 });
+await pg.goto(`http://localhost:${PORT}/index.html?bot=1&q=low&msaa=0&shadows=${process.env.SHADOWS || 0}&seed=${1000 + ri}`, { waitUntil: 'load', timeout: 300000 });
 await pg.waitForFunction(() => window.HX && window.HX.ready, null, { timeout: 900000, polling: 500 });
 await pg.addScriptTag({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), 'bot.js') });
 await pg.evaluate((seed) => { window.H = window.BBX(seed); }, 1000 + ri);

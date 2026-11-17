@@ -8,7 +8,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { buildWorld, U, los, lightAt, OBSTACLES } from './world.js';
+import { buildWorld, U, los, lightAt, OBSTACLES, texturesReady } from './world.js';
 import { wallDist } from './game.js';
 import { Game } from './game.js';
 import * as P from './plan.js';
@@ -170,6 +170,7 @@ buildWorld(scene, renderer, (s) => { $('load').textContent = 'loading ' + s; }).
   G.world = w;
   game.seed = +(q.get('seed') || 1);
   await game.init();
+  $('load').textContent = 'loading textures'; await texturesReady();
   game.viewCam.aspect = camera.aspect; game.viewCam.updateProjectionMatrix();
   setupPost();
   G.ready = true; $('load').textContent = BOT ? 'bot' : 'click to start';
