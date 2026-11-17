@@ -115,6 +115,7 @@ class Actor {
     this.mixer.update(dt);
     const m = this.mesh;
     m.position.copy(this.pos); m.rotation.set(0, this.yaw + (this.model === 'soldier' ? 0 : Math.PI), 0);
+    if (this.flinch > 0) { this.flinch = Math.max(0, this.flinch - dt * 5); m.rotation.x -= (this.model === 'soldier' ? 1 : -1) * this.flinch * 0.12; }
     if (!this.alive) { const k = Math.min(1, (this.deadT || 0) * 2.5); m.rotation.x = k * k * 1.45; m.position.y = this.pos.y + k * 0.12; }
     m.updateMatrixWorld(true);
     const b = this.bones, f = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)), r = new THREE.Vector3(-f.z, 0, f.x);
@@ -212,7 +213,7 @@ export class Game {
     this.actors = []; this.items = [];
     const rnd = (this.rnd = mulberry(this.seed || 1));
     this.t = 0;
-    this.player = { pos: new THREE.Vector3(P.cx(13) + 1, 0, P.cz(5)), L: 0, yaw: Math.PI, pitch: 0, vel: new THREE.Vector3(), hp: 100, ammo: 12, reserve: 60, reloadT: -1, cool: 0, kick: 0, lives: 0, torch: false, rampFrom: null, lastCell: -1, cellPath: [] };
+    this.player = { ads: 0, run: false, bobPh: 0, kickYaw: 0, bloom: 0, sway: [0, 0], pos: new THREE.Vector3(P.cx(13) + 1, 0, P.cz(5)), L: 0, yaw: Math.PI, pitch: 0, vel: new THREE.Vector3(), hp: 100, ammo: 12, reserve: 60, reloadT: -1, cool: 0, kick: 0, lives: 0, torch: false, rampFrom: null, lastCell: -1, cellPath: [] };
     this.power = 1; this.powerUntil = 0; this.pendingDark = null;
     this.score = { rescued: 0, wrong: 0, hostiles: 0 };
     // the stairwells' hidden risk: a slowly drifting chance of an ambush on each flight
@@ -255,7 +256,7 @@ export class Game {
     this.stepDirector(dt, inp);
     this.trackCalls();
     // power and the torch
-    if (this.power < 0.5 && this.t > this.powerUntil) { this.power = 1; this.msg('POWER BACK'); this.log.blackouts.push([this.t, 'on']); }
+    if (this.power < 0.5 && this.t > this.powerUntil) { this.power = 1; this.msg('POWER BACK'); this.log.blackouts.push([this.t, 'on']); if (this.fx) this.fx.power(true); }
     U.uPower.value += ((this.power > 0.5 ? 1 : 0.02) - U.uPower.value) * Math.min(1, dt * 6);
     if (BULBS.mesh) BULBS.mesh.material.color.copy(BULBS.color).multiplyScalar(U.uPower.value);
     this.torch.intensity = p.torch ? 9 : 0;
@@ -264,14 +265,30 @@ export class Game {
     this.viewScene.environment = this.scene.environment; this.viewScene.environmentIntensity = 0.25 * (0.3 + 0.7 * U.uPower.value);
     this.animateDoors(dt);
     // camera
-    const cam = this.camera;
-    cam.position.set(p.pos.x, p.pos.y + EYE, p.pos.z);
-    cam.rotation.set(p.pitch + p.kick, p.yaw, 0, 'YXZ');
-    p.kick *= Math.exp(-dt * 14);
+    const cam = this.camera, H = this.human, sp = Math.hypot(p.vel.x, p.vel.z);
+    p.ads += ((inp.ads && p.reloadT < 0 ? 1 : 0) - p.ads) * Math.min(1, dt * 12);
+    p.run = !!inp.run && sp > 3.5;
+    // head bob (human play only) and the step sounds on its beat
+    const ph0 = p.bobPh; p.bobPh += dt * sp * (p.run ? 2.3 : 2.6);
+    if (H && Math.floor(p.bobPh / Math.PI) !== Math.floor(ph0 / Math.PI) && sp > 0.8 && this.fx) this.fx.step(this.surface(), p.run);
+    const bobA = H ? Math.min(1, sp / 3) * (1 - 0.7 * p.ads) : 0;
+    cam.position.set(p.pos.x, p.pos.y + EYE + Math.abs(Math.sin(p.bobPh)) * 0.035 * bobA - 0.017 * bobA, p.pos.z);
+    cam.rotation.set(p.pitch + p.kick, p.yaw + p.kickYaw, H ? Math.sin(p.bobPh) * 0.006 * bobA - p.sway[0] * 0.02 : 0, 'YXZ');
+    p.kick *= Math.exp(-dt * 11); p.kickYaw *= Math.exp(-dt * 9); p.bloom *= Math.exp(-dt * 3.5);
+    const fovT = 72 - 18 * p.ads + (p.run ? 5 : 0);
+    if (Math.abs(cam.fov - fovT) > 0.01) { cam.fov += (fovT - cam.fov) * Math.min(1, dt * 10); cam.updateProjectionMatrix(); }
     const ld = lightAt(p.L, p.pos.x, p.pos.y + 1.2, p.pos.z, 0, 1, 0);
-    this.viewBake.value.set(ld[0] * 0.8 + 0.05 + (p.torch ? 0.4 : 0), ld[1] * 0.6);
-    this.vp.rotation.z = p.kick * 5; if (this.slide) this.slide.position.x = this.slideX - Math.min(0.03, p.kick * 0.9); this.vp.position.z = -0.42 + p.kick * 2; this.vp.position.y = -0.19 + Math.sin(this.t * 9) * 0.004 * Math.min(1, p.vel.length() / 3) - (p.reloadT > 0 ? 0.12 : 0);
+    this.viewBake.value.set((ld[0] * U.uPower.value) * 0.8 + 0.05 + (p.torch ? 0.4 : 0), ld[1] * 0.6);
+    // the pistol in hand: sway behind the look, bob with the step, kick and slide on a shot, down for a reload, up to the eye when aiming
+    p.sway[0] += ((inp.lookX || 0) * 6 - p.sway[0]) * Math.min(1, dt * 8); p.sway[1] += ((inp.lookY || 0) * 6 - p.sway[1]) * Math.min(1, dt * 8);
+    const a = p.ads, bx = Math.cos(p.bobPh) * 0.012 * bobA, by = -Math.abs(Math.sin(p.bobPh)) * 0.01 * bobA;
+    this.vp.position.set(0.17 * (1 - a) + bx + p.sway[0] * 0.04, -0.19 + 0.052 * a + by + p.sway[1] * 0.03 - (p.reloadT > 0 ? 0.12 * Math.sin(Math.min(1, (1.4 - p.reloadT) / 1.4) * Math.PI) : 0) - (p.run ? 0.03 : 0), -0.42 + 0.08 * a + p.kick * 2.2);
+    this.vp.rotation.set(-p.sway[1] * 0.3 + (p.run ? -0.25 : 0), Math.PI / 2 + p.sway[0] * 0.3 + (p.run ? 0.35 : 0), p.kick * 5);
+    if (this.slide) this.slide.position.x = this.slideX - Math.min(0.03, p.kick * 0.9);
+    this.viewCam.fov = 60 - 8 * a; this.viewCam.updateProjectionMatrix();
+    this.stepFx(dt);
   }
+  surface() { const r = P.roomAt(this.player.L, P.ci(this.player.pos.x), P.ck(this.player.pos.z)); const k = r >= 0 ? P.ROOMS[r].kind : ''; return /hall|gallery|guestA|suite/.test(k) ? 'carpet' : 'hard'; }
 
   stepPlayer(dt, inp) {
     const p = this.player;
@@ -295,17 +312,56 @@ export class Game {
     const p = this.player;
     p.cool -= dt;
     if (p.reloadT > 0) { p.reloadT -= dt; if (p.reloadT <= 0) { const n = Math.min(12 - p.ammo, p.reserve); p.ammo += n; p.reserve -= n; p.reloadT = -1; } return; }
-    if ((inp.reload && p.ammo < 12 && p.reserve > 0) || (p.ammo === 0 && p.reserve > 0 && inp.fire)) { p.reloadT = 1.4; return; }
+    if ((inp.reload && p.ammo < 12 && p.reserve > 0) || (p.ammo === 0 && p.reserve > 0 && inp.fire)) { p.reloadT = 1.4; if (this.fx) this.fx.reload(); return; }
+    if (inp.fire && p.cool <= 0 && p.ammo === 0 && this.fx && !p.dry) { this.fx.empty(); p.dry = true; }
+    if (!inp.fire) p.dry = false;
     if (inp.fire && p.cool <= 0 && p.ammo > 0) {
-      p.ammo--; p.cool = 0.2; p.kick += 0.035; this.flash.intensity = 30;
-      const hit = this.hitscan(), aim = this.aimTarget();
+      p.ammo--; p.cool = 0.2; p.kick += 0.035 * (1 - 0.4 * p.ads); this.flash.intensity = 30;
+      let dir = null;
+      if (this.human) {   // where the shot actually goes: hip-fire spread opens with movement and rapid fire
+        p.kickYaw += (Math.random() - 0.5) * 0.012;
+        const spr = this.spread() * Math.PI / 180, r = Math.sqrt(Math.random()) * spr, th = Math.random() * 6.283;
+        dir = new THREE.Vector3(Math.cos(th) * r, Math.sin(th) * r, -1).normalize().applyEuler(this.camera.rotation);
+        p.bloom = Math.min(2.5, p.bloom + 0.6);
+        if (this.fx) this.fx.shot(this.enclosed());
+      }
+      const hit = this.hitscan(dir), aim = this.aimTarget();
+      if (this.fx) { if (hit) this.fx.hitActor(hit, this.camera.position.clone().addScaledVector(dir || new THREE.Vector3(0, 0, -1).applyEuler(this.camera.rotation), hit.d)); else this.fx.impact(this.castWorld(dir)); }
       this.log.shots.push([+this.t.toFixed(2), hit ? hit.a.id : -1, hit ? +hit.d.toFixed(2) : -1, hit ? (hit.head ? 2 : 1) : 0, aim ? aim[0].id : -1, aim ? +aim[1].toFixed(2) : -1]);
       if (aim) this.resolveCall(aim[0], 'shoot');
       if (hit) this.damage(hit.a, hit.head ? 100 : 40);
     }
   }
-  hitscan() {
-    const cam = this.camera, o = cam.position.clone(), d = new THREE.Vector3(0, 0, -1).applyEuler(cam.rotation);
+  spread() { const p = this.player, sp = Math.hypot(p.vel.x, p.vel.z); return (0.15 + 1.6 * (1 - p.ads) * (0.35 + Math.min(1, sp / 3)) + p.bloom * (1 - 0.6 * p.ads)) * (p.run ? 2 : 1); }
+  enclosed() { const p = this.player, r = P.roomAt(p.L, P.ci(p.pos.x), P.ck(p.pos.z)); return r >= 0 && P.ROOMS[r].outdoor ? 0.25 : 1; }
+  // where a ray from the eye meets the building: marches through the plan (walls, floor, ceiling)
+  castWorld(dir) {
+    const p = this.player, o = this.camera.position.clone(), d = dir || new THREE.Vector3(0, 0, -1).applyEuler(this.camera.rotation);
+    let L = p.L, i = P.ci(o.x), k = P.ck(o.z);
+    const y0 = L * LH, yc = y0 + P.CEIL;
+    for (let s = 0.05; s < 40; s += 0.05) {
+      const x = o.x + d.x * s, y = o.y + d.y * s, z = o.z + d.z * s;
+      const rp = P.rampAt(L, P.ci(x), P.ck(z)), fy = rp >= 0 ? P.rampY(P.RAMPS[rp], x, z) : y0;
+      if (y < fy) return { pos: new THREE.Vector3(x, fy + 0.005, z), n: new THREE.Vector3(0, 1, 0), floor: true };
+      const ceil = P.kindAt(L + 1, P.ci(x), P.ck(z)) === 2 || P.kindAt(L + 1, P.ci(x), P.ck(z)) === 3 || (P.roomAt(L, P.ci(x), P.ck(z)) >= 0 && P.ROOMS[P.roomAt(L, P.ci(x), P.ck(z))].outdoor) ? 1e9 : yc;
+      if (y > ceil) return { pos: new THREE.Vector3(x, ceil - 0.005, z), n: new THREE.Vector3(0, -1, 0) };
+      const ni = P.ci(x), nk = P.ck(z);
+      if (ni !== i || nk !== k) {
+        const sd = ni > i ? 'E' : ni < i ? 'W' : nk > k ? 'N' : 'S';
+        const e = P.edgeAt(L, i, k, sd);
+        const blocks = e && e !== 'rail' && e !== 'door' && !(e === 'sdoor' && P.DOOR_OF.get(P.edgeKey(L, i, k, sd)).open) || (e === 'door' && y > y0 + 2.3) || ((e === 'window') && (y < y0 + 0.95 || y > y0 + 2.65)) || (e === 'rail' && y < y0 + 1.0);
+        if (blocks) {
+          const n = sd === 'E' ? new THREE.Vector3(-1, 0, 0) : sd === 'W' ? new THREE.Vector3(1, 0, 0) : sd === 'N' ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(0, 0, 1);
+          const ex = sd === 'E' ? P.X0 + (i + 1) * P.C : sd === 'W' ? P.X0 + i * P.C : x, ez = sd === 'N' ? P.Z0 + (k + 1) * P.C : sd === 'S' ? P.Z0 + k * P.C : z;
+          return { pos: new THREE.Vector3(sd === 'E' || sd === 'W' ? ex + n.x * 0.075 : x, y, sd === 'N' || sd === 'S' ? ez + n.z * 0.075 : z), n, glass: e === 'glass' || e === 'window', metal: e === 'sdoor' || e === 'rail' };
+        }
+        i = ni; k = nk;
+      }
+    }
+    return null;
+  }
+  hitscan(dir = null) {
+    const cam = this.camera, o = cam.position.clone(), d = dir || new THREE.Vector3(0, 0, -1).applyEuler(cam.rotation);
     let best = null;
     const aim = this.aimTarget();
     for (const a of this.actors) {
@@ -326,8 +382,10 @@ export class Game {
   }
   damage(a, n) {
     a.hp -= n; a.state = a.hostile ? 'fight' : a.state; a.hitT = this.t;
+    a.flinch = 1;
     if (a.hp <= 0 && a.alive) {
       a.alive = false; a.deadT = 0; a.play('Idle');
+      if (this.fx) this.fx.kill(a);
       this.log.kills.push([this.t, a.id, a.hostile ? 1 : 0, a.role]);
       if (a.hostile) this.score.hostiles++; else { this.score.wrong++; this.msg(a.objective ? 'YOU SHOT THE GUEST' : 'NOT A GUNMAN'); }
       if (a.objective && this.objective && this.objective.guest === a) { this.log.objectives.push([this.t, 'failed', this.objective.room]); this.objective = null; this.nextObjT = this.t + 3; }
@@ -371,8 +429,10 @@ export class Game {
             a.fireT = 0.7 + Math.random() * 0.6;
             const dark = this.power < 0.5 ? 0.25 : 0;
             const ph = Math.max(0.08, 0.5 - d * 0.016 - dark - Math.min(0.2, p.vel.length() * 0.03));
-            if (Math.random() < ph) { p.hp -= 11; this.hurtT = this.t; }
+            const hitMe = Math.random() < ph;
+            if (hitMe) { p.hp -= 11; this.hurtT = this.t; }
             a.muzzleT = this.t;
+            if (this.fx) this.fx.enemyFire(a, hitMe);
           }
         }
         a.play(a.state === 'idle' ? 'Idle' : 'Idle');
@@ -424,7 +484,7 @@ export class Game {
     if (o && o.phase === 'find' && o.guest.alive) {
       const g = o.guest, d = Math.hypot(g.pos.x - p.pos.x, g.pos.z - p.pos.z);
       if (g.L === p.L && d < 2.6 && inp.use) {
-        o.phase = 'escort'; g.escort = true; g.pose = 'none'; this.log.pickups.push([this.t, o.room, g.id]);
+        o.phase = 'escort'; g.escort = true; g.pose = 'none'; this.log.pickups.push([this.t, o.room, g.id]); if (this.fx) this.fx.pickup();
         this.msg('WITH YOU. OUT BY THE FRONT DOORS OR THE TERRACE.');
         if (rnd() < 0.7) this.pendingDark = this.t + 2 + rnd() * 3;
       }
@@ -436,7 +496,7 @@ export class Game {
     // blackouts
     if (this.pendingDark != null && this.t > this.pendingDark && this.power > 0.5) {
       this.pendingDark = null; this.power = 0; this.powerUntil = this.t + 15 + rnd() * 10;
-      this.log.blackouts.push([this.t, 'off', this.powerUntil]); this.msg('THE POWER IS OUT');
+      this.log.blackouts.push([this.t, 'off', this.powerUntil]); this.msg('THE POWER IS OUT'); if (this.fx) this.fx.power(false);
     }
     // encounters: someone in the corridor ahead every 4-10 s
     this.nextEnc -= dt;
@@ -545,6 +605,7 @@ export class Game {
     let u = rnd() * cands.reduce((s, q) => s + q[1], 0), pick = cands[0][0];
     for (const [d, w] of cands) { u -= w; if (u <= 0) { pick = d; break; } }
     pick.open = !pick.open;
+    if (this.fx) this.fx.door(pick);
     if (!pick.open && !this.connected()) { pick.open = true; return; }
     this.log.doors.push([this.t, pick.id, pick.open ? 1 : 0]);
     if (this.G.world) for (const rec of this.G.world.DOORS) if (rec.door === pick) rec.target = pick.open ? 1 : 0;
@@ -584,6 +645,7 @@ export class Game {
     if (a.callT == null || a.resolved) return;
     a.resolved = how; this.log.resp.push([+this.t.toFixed(2), a.id, how, +(this.t - a.callT).toFixed(2), a.hostile ? 1 : 0]);
   }
+  stepFx(dt) { if (this.fx) this.fx.update(dt); }
   // people in view: [screen x (deg), screen y (deg), distance, clear line, id, hostile, light, pose]
   visible() {
     const cam = this.camera, p = this.player, out = [];

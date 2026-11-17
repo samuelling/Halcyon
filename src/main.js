@@ -11,6 +11,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { buildWorld, U, los, lightAt, OBSTACLES, texturesReady } from './world.js';
 import { wallDist } from './game.js';
 import { Game } from './game.js';
+import { FX } from './fx.js';
 import * as P from './plan.js';
 
 const q = new URLSearchParams(location.search);
@@ -71,6 +72,7 @@ const hud = {
 };
 const G = window.HX = { THREE, scene, camera, renderer, P, U, ready: false, hud, HXlos: los, HXobs: OBSTACLES, HXwall: (L, x, z) => wallDist(L, x, z), HXlight: (L, x, y, z) => lightAt(L, x, y, z, 0, 1, 0) };
 const game = new Game(G); G.game = game;
+game.human = !BOT;
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight);
@@ -95,6 +97,14 @@ function drawHud() {
   if ($('stat').innerHTML !== s) $('stat').innerHTML = s;
   const g = o && o.phase === 'find' && o.guest.alive && o.guest.L === p.L && Math.hypot(o.guest.pos.x - p.pos.x, o.guest.pos.z - p.pos.z) < 2.6;
   $('pick').textContent = 'E — take them with you'; $('pick').style.opacity = g ? 1 : 0;
+  const fx = game.fx;
+  if (fx) {
+    const gap = Math.max(3, Math.tan(game.spread() * Math.PI / 180) / Math.tan(camera.fov * Math.PI / 360) * innerHeight / 2);
+    $('xh').style.setProperty('--gap', gap.toFixed(1) + 'px'); $('xh').style.opacity = 1 - 0.85 * p.ads;
+    $('hm').style.opacity = fx.hm > 0 ? Math.min(1, fx.hm * 6) : 0; $('hm').classList.toggle('kill', !!fx.hmKill);
+    const arcs = $('dmg'); while (arcs.children.length < fx.dmg.length) { const d = document.createElement('div'); d.className = 'arc'; arcs.appendChild(d); }
+    [...arcs.children].forEach((el, n) => { const d = fx.dmg[n]; if (!d) { el.style.opacity = 0; return; } el.style.opacity = Math.min(1, d.life); el.style.transform = `rotate(${(-d.ang * 180 / Math.PI).toFixed(1)}deg)`; });
+  }
   const hurt = Math.max(0, 1 - (game.t - (game.hurtT ?? -9)) / 0.6);
   $('hurt').style.boxShadow = `inset 0 0 ${160 + (100 - p.hp)}px rgba(160,0,0,${(0.55 * hurt + (p.hp < 35 ? 0.3 : 0)).toFixed(2)})`;
   if (performance.now() - hud.msgT > 2600) $('msg').style.opacity = 0;
@@ -112,6 +122,10 @@ addEventListener('mousemove', (e) => {
   if (document.pointerLockElement) { mdx += e.movementX; mdy += e.movementY; }
   else if (drag && playing && !TOUCH) { mdx += e.clientX - drag[0]; mdy += e.clientY - drag[1]; if (Math.abs(e.clientX - drag[2]) + Math.abs(e.clientY - drag[3]) > 6) drag[4] = true; drag[0] = e.clientX; drag[1] = e.clientY; }
 });
+let ads = false;
+addEventListener('contextmenu', (e) => { if (playing) e.preventDefault(); });
+addEventListener('mousedown', (e) => { if (e.button === 2 && playing) ads = true; });
+addEventListener('mouseup', (e) => { if (e.button === 2) ads = false; });
 addEventListener('mousedown', (e) => {
   if (TOUCH || !playing || e.button !== 0) return;
   if (document.pointerLockElement) firing = true; else drag = [e.clientX, e.clientY, e.clientX, e.clientY, false];
@@ -119,7 +133,7 @@ addEventListener('mousedown', (e) => {
 addEventListener('mouseup', (e) => { if (e.button !== 0) return; firing = false; if (drag && !drag[4] && !document.pointerLockElement && playing) { tapFire = 0.12; } drag = null; });
 let tapFire = 0;
 // touch controls
-const tc = { move: null, look: null, mx: 0, mz: 0, fire: false, use: false, run: false };
+const tc = { move: null, look: null, mx: 0, mz: 0, fire: false, use: false, run: false, ads: false };
 function touchUI() {
   const css = document.createElement('style');
   css.textContent = `.tb{position:fixed;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);color:#fff;font:600 11px Helvetica;display:flex;align-items:center;justify-content:center;letter-spacing:.06em;z-index:4;user-select:none;-webkit-user-select:none;touch-action:none}
@@ -128,7 +142,8 @@ function touchUI() {
   document.head.appendChild(css);
   const st = document.createElement('div'); st.id = 'stick'; st.innerHTML = '<div id="nub"></div>'; document.body.appendChild(st);
   const btn = (label, r, b, w = 64) => { const d = document.createElement('div'); d.className = 'tb'; d.textContent = label; d.style.right = r + 'px'; d.style.bottom = b + 'px'; d.style.width = d.style.height = w + 'px'; document.body.appendChild(d); return d; };
-  const bf = btn('FIRE', 24, 110, 84), bu = btn('USE', 126, 40), br = btn('RELOAD', 24, 30, 56), bt = btn('TORCH', 196, 40, 56), brun = btn('RUN', 126, 120, 56);
+  const bf = btn('FIRE', 24, 110, 84), bu = btn('USE', 126, 40), br = btn('RELOAD', 24, 30, 56), bt = btn('TORCH', 196, 40, 56), brun = btn('RUN', 126, 120, 56), bads = btn('AIM', 24, 210, 56);
+  hold(bads, () => { tc.ads = !tc.ads; bads.classList.toggle('on', tc.ads); }, () => bads.classList.toggle('on', tc.ads));
   const hold = (el, on, off) => { el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); el.classList.add('on'); on(); }, { passive: false }); el.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); el.classList.remove('on'); off && off(); }, { passive: false }); };
   hold(bf, () => { tc.fire = true; }, () => { tc.fire = false; });
   hold(bu, () => { tc.use = true; }, () => { tc.use = false; });
@@ -159,7 +174,8 @@ function humanInput(dt) {
   const turn = ((keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0)) * 2.2 * dt, tilt = ((keys.has('ArrowDown') ? 1 : 0) - (keys.has('ArrowUp') ? 1 : 0)) * 1.5 * dt;
   const inp = {
     moveZ: (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0) + tc.mz, moveX: (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0) + tc.mx,
-    run: keys.has('ShiftLeft') || keys.has('ShiftRight') || tc.run, lookX: mdx * 0.0022 + turn, lookY: mdy * 0.0022 + tilt,
+    run: (keys.has('ShiftLeft') || keys.has('ShiftRight') || tc.run) && !(ads || tc.ads), ads: ads || tc.ads || keys.has('KeyQ'),
+    lookX: (mdx * 0.0022 + turn) * (1 - 0.45 * game.player.ads), lookY: (mdy * 0.0022 + tilt) * (1 - 0.45 * game.player.ads),
     fire: firing || tc.fire || tapFire > 0 || keys.has('Space'), reload: edge.has('KeyR'), use: keys.has('KeyE') || tc.use, torchToggle: edge.has('KeyF'),
   };
   tapFire -= dt; mdx = mdy = 0; edge.clear(); return inp;
@@ -173,6 +189,7 @@ buildWorld(scene, renderer, (s) => { $('load').textContent = 'loading ' + s; }).
   $('load').textContent = 'loading textures'; await texturesReady();
   game.viewCam.aspect = camera.aspect; game.viewCam.updateProjectionMatrix();
   setupPost();
+  if (!BOT && q.get('nofx') !== '1') { game.fx = new FX(game, hud); G.fx = game.fx; }
   G.ready = true; $('load').textContent = BOT ? 'bot' : 'click to start';
   // warm the shaders once so the first frame isn't a stall
   renderer.compile(scene, camera); draw();
@@ -183,9 +200,10 @@ buildWorld(scene, renderer, (s) => { $('load').textContent = 'loading ' + s; }).
     return;
   }
   if (TOUCH) { touchUI(); $('tkeys').textContent = 'Tap to start · left thumb moves · right thumb looks · FIRE · USE (take a guest) · TORCH'; }
-  else $('tkeys').textContent = 'Click to start · WASD move · mouse look (or drag / arrow keys) · click or Space fire · R reload · E use · Shift run · F torch · Esc pause';
+  else $('tkeys').textContent = 'Click to start · WASD move · mouse look (or drag / arrow keys) · click or Space fire · right mouse or Q aim · R reload · E use · Shift run · F torch · Esc pause';
   const start = () => {
     $('title').style.display = 'none'; playing = true;
+    try { game.fx && game.fx.start(); } catch (e) {}
     if (!TOUCH) { try { const r = renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
     else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
   };
