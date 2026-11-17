@@ -21,7 +21,8 @@ const WALL = { lobby: ['beige_wall_001', 3], reception: ['beige_wall_001', 3], b
   library: ['decrepit_wallpaper', 2], kitchen: ['grey_tiles', 1.5], staff: ['painted_plaster_wall', 2.5], terrace: ['white_stucco', 3], hall: ['peeling_painted_wall', 3],
   gallery: ['plastered_wall_04', 3], guestA: ['decrepit_wallpaper', 2], guestB: ['blue_plaster_weathered', 2.5], suite: ['patterned_clay_plaster', 2.5],
   stair: ['worn_plaster_wall', 3], outside: ['white_stucco', 3] };
-const CEILM = ['white_plaster_rough_01', 3];
+const OUTSIDE_TINT = 0xd9d2c4;
+const CEILM = ['beige_wall_001', 3];
 // rooms with dark panelling to dado height; the rest get a skirting board
 const WAINSCOT = new Set(['lobby', 'reception', 'ballroom', 'bar', 'library', 'gallery', 'suite', 'hall']);
 const DADO = 1.05;
@@ -180,7 +181,7 @@ export function lightAt(L, x, y, z, nx, ny, nz) {
   else if (nearAtrium && P.kindAt(L, i, k) !== 0) day += 0.22 * (L === 2 ? 1.5 : 1);
   // outdoors
   const rm = P.roomAt(L, i, k);
-  if (rm >= 0 && P.ROOMS[rm].outdoor) day += 0.9 + 0.8 * Math.max(0, ny * 0.8 + nx * 0.3 + nz * 0.2);
+  if (rm >= 0 && P.ROOMS[rm].outdoor) day += 0.55 + 0.55 * Math.max(0, ny * 0.8 + nx * 0.3 + nz * 0.2);
   return [lamp, day];
 }
 
@@ -255,8 +256,8 @@ export async function buildWorld(scene, renderer, onProgress = () => {}) {
   addLamps();
   const B = new Batch();
   const fm = (kind) => { const f = FLOOR[kind] || FLOOR.hall; return [surfMat(tl, f[0], f[0].startsWith('quatrefoil') ? { color: 0xc9b2a6 } : {}), f[1]]; };
-  const wm = (kind) => { const f = WALL[kind] || WALL.hall; return [surfMat(tl, f[0]), f[1]]; };
-  const [ceilMat, ceilS] = [surfMat(tl, CEILM[0]), CEILM[1]];
+  const wm = (kind) => { const f = WALL[kind] || WALL.hall; return [surfMat(tl, f[0], kind === 'outside' || kind === 'terrace' ? { color: OUTSIDE_TINT } : {}), f[1]]; };
+  const [ceilMat, ceilS] = [surfMat(tl, CEILM[0], { color: 0xfff6ea }), CEILM[1]];
   const trim = patch(new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.55, metalness: 0.0 }));
   const panelMat = surfMat(tl, 'dark_paneled_wood', { color: 0xf0d8c8 });
   const trimMat = surfMat(tl, 'dark_paneled_wood', { color: 0x6a5048 });
@@ -455,7 +456,7 @@ export async function buildWorld(scene, renderer, onProgress = () => {}) {
   scene.environment = env; scene.background = hdr; scene.backgroundIntensity = 0.9; scene.environmentIntensity = 0.35;
   buildExterior(scene, root, env);
   // the sun, high over the sea to the north-west: through the windows, the atrium roof and onto the terrace
-  const sun = new THREE.DirectionalLight(0xffe2c0, 4.2);
+  const sun = new THREE.DirectionalLight(0xffe2c0, 3.2);
   sun.position.set(-28, 78, 34); sun.target.position.set(0, 0, 6);
   sun.castShadow = true; sun.shadow.mapSize.set(renderer.getPixelRatio() > 1 || innerWidth > 900 ? 4096 : 2048, renderer.getPixelRatio() > 1 || innerWidth > 900 ? 4096 : 2048);
   Object.assign(sun.shadow.camera, { left: -42, right: 42, top: 42, bottom: -42, near: 10, far: 170 });
