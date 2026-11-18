@@ -67,6 +67,8 @@ func _ready() -> void:
 			level.signs.clear()
 		if args.has("noexp"): level.cam_attr.auto_exposure_enabled = false
 		if args.has("nobody"): view.show_body = false
+		if args.has("noview"): view.show_body = false; view.pistol.visible = false   # no arms, no pistol: the scene alone
+		game.enc_gate = float(args.get("gate", str(game.enc_gate))); game.enc_min = float(args.get("emin", str(game.enc_min))); game.enc_span = float(args.get("espan", str(game.enc_span))); game.enc_serial = args.get("serial", "1" if game.enc_serial else "0") == "1"
 		_scan()
 	elif mode == "shots": _shots()
 	get_viewport().size_changed.connect(func(): var s := get_viewport().get_visible_rect().size; game.aspect = s.x / s.y)

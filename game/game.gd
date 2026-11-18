@@ -66,6 +66,13 @@ var pending_dark = null
 var score := {"rescued": 0, "wrong": 0, "hostiles": 0}
 var risk: Array = []
 var next_enc := 3.0
+# pacing of encounters: no new group within enc_gate s of the last call; then enc_min + U(0, enc_span) s to the next.
+# Round 13 sweep: these values give a call about every 6 s (median) and ~420 calls an hour
+var enc_gate := 2.0
+var enc_min := 1.0
+var enc_span := 2.0
+var enc_serial := false     # true: never more than one unjudged group in the building (calls 9-10 s apart, ~270 an hour)
+var why := {}          # seconds the director spent unable to send a group, by reason
 var next_door := 8.0
 var next_risk := 20.0
 var next_obj_t := 0.0
@@ -362,10 +369,18 @@ func step_actors(dt: float) -> void:
 				if lead:
 					tx = lead.pos.x - sin(lead.yaw) * a.off.y + cos(lead.yaw) * a.off.x; tz = lead.pos.z - cos(lead.yaw) * a.off.y - sin(lead.yaw) * a.off.x
 				else:
+					# those coming for you keep coming: the leader re-plans towards where you are now
+					if a.state == "approach" and a.L == p.L and t - a.repath_t > 1.2:
+						a.repath_t = t
+						var rt := Plan.path(Plan.node_id(a.L, Plan.ci(a.pos.x), Plan.ck(a.pos.z)), Plan.node_id(p.L, Plan.ci(p.pos.x), Plan.ck(p.pos.z)))
+						if rt.size() >= 2:
+							var pts: Array = []
+							for q in range(1, rt.size()): pts.append([Plan.node_l(rt[q]), Plan.cx(Plan.node_i(rt[q])), Plan.cz(Plan.node_k(rt[q]))])
+							a.route = pts; a.ri = 0
 					var w: Array = a.route[mini(a.ri, a.route.size() - 1)]
 					tx = w[1]; tz = w[2]
 					if Vector2(tx - a.pos.x, tz - a.pos.z).length() < 0.5 and a.ri < a.route.size() - 1: a.ri += 1
-				_walk(a, tx, tz, a.walk_sp * (1.25 if lead else 1.0), dt)
+				_walk(a, tx, tz, a.walk_sp * (1.25 if lead else 1.0) * (1.0 if sees else 1.35), dt)   # brisk until they come into view
 				a.sync(dt); continue
 		if a.hostile:
 			if sees and a.state == "idle": a.state = "alert"; a.alert_t = t
@@ -406,6 +421,11 @@ func step_actors(dt: float) -> void:
 		if a.objective and objective and objective["guest"] == a: keep.append(a); continue
 		var far := Vector2(a.pos.x - p.pos.x, a.pos.z - p.pos.z).length() > 32.0 or a.L != p.L
 		var old: bool = (not a.alive and a.dead_t > 25.0) or (far and a.t > 15.0) or (a.objective and (objective == null or objective["guest"] != a) and a.alive)
+		# people you have judged and left behind go their own way once out of sight
+		var gr = group_rec.get(a.group)
+		if a.alive and not a.objective and gr and gr["resolved"] != "" and t - maxf(a.seen_t, gr["call_t"]) > (6.0 if a.hostile else 3.5): old = true
+		# a group that never found you turns back, so the next can set out
+		if a.alive and not a.objective and gr and gr["call_t"] < 0.0 and a.t > 9.0: old = true
 		if old: a.dispose()
 		else: keep.append(a)
 	actors = keep
@@ -463,10 +483,11 @@ func step_director(dt: float, inp: Inp) -> void:
 	if next_enc <= 0.0:
 		var waiting := false
 		for a in actors:
-			if a.alive and not a.objective and a.state == "approach" and a.t < 9.0 and group_rec[a.group]["call_t"] < 0.0: waiting = true
-		if waiting or rp >= 0 or t - last_call_t < 4.5: next_enc = 0.4
-		elif spawn_group(): next_enc = 2.5 + rng.randf() * 3.5
-		else: next_enc = 0.7
+			if a.alive and not a.objective and group_rec[a.group]["call_t"] < 0.0 and (enc_serial or (a.state == "approach" and a.t < 6.0)): waiting = true   # serial: one unjudged group in the building at a time
+		if waiting or rp >= 0 or t - last_call_t < enc_gate:
+			next_enc = 0.3; why["waiting" if waiting else ("stairs" if rp >= 0 else "gate")] = why.get("waiting" if waiting else ("stairs" if rp >= 0 else "gate"), 0.0) + 0.3
+		elif spawn_group(): next_enc = enc_min + rng.randf() * enc_span
+		else: next_enc = 0.7; why["nowhere"] = why.get("nowhere", 0.0) + 0.7
 	next_door -= dt
 	if next_door <= 0.0: toggle_door(); next_door = 8.0 + rng.randf() * 10.0
 	next_risk -= dt
@@ -501,14 +522,14 @@ func spawn_group() -> bool:
 	var p := player
 	var alive_n := 0
 	for a in actors:
-		if a.alive and not a.objective: alive_n += 1
-	if alive_n > 8: return false
+		if a.alive and not a.objective and (group_rec[a.group]["resolved"] == "" or t - a.seen_t < 3.0): alive_n += 1
+	if alive_n > 8: why["cap"] = why.get("cap", 0.0) + 1.0; return false
 	var src := Plan.node_id(p.L, Plan.ci(p.pos.x), Plan.ck(p.pos.z))
 	var dist := Plan.bfs(src); var fx_ := -sin(p.yaw); var fz := -cos(p.yaw)
 	var cands: Array = []; var tot := 0.0
 	for n: int in dist:
 		var d: int = dist[n]
-		if d < 4 or d > 11 or Plan.node_l(n) != p.L: continue
+		if d < 3 or d > 10 or Plan.node_l(n) != p.L: continue
 		var i := Plan.node_i(n); var k := Plan.node_k(n)
 		if Plan.kind_at(p.L, i, k) != 1 or blocked_cell(p.L, i, k): continue
 		var x := Plan.cx(i); var z := Plan.cz(k); var dx := x - p.pos.x; var dz := z - p.pos.z; var e := sqrt(dx * dx + dz * dz)
@@ -517,9 +538,9 @@ func spawn_group() -> bool:
 		for a in actors:
 			if a.alive and a.L == p.L and Vector2(a.pos.x - x, a.pos.z - z).length() < 4.0: crowded = true
 		if crowded: continue
-		var w := 1.0 + maxf(0.0, (dx * fx_ + dz * fz) / e) * 3.0
+		var w := (1.0 + maxf(0.0, (dx * fx_ + dz * fz) / e) * 3.0) * (2.0 if d <= 6 else 1.0)
 		cands.append([n, i, k, w]); tot += w
-	if cands.is_empty(): return false
+	if cands.is_empty(): why["nocand_" + Plan.room_kind(p.L, Plan.ci(p.pos.x), Plan.ck(p.pos.z))] = why.get("nocand_" + Plan.room_kind(p.L, Plan.ci(p.pos.x), Plan.ck(p.pos.z)), 0.0) + 1.0; return false
 	var u := rng.randf() * tot; var pick: Array = cands[0]
 	for c: Array in cands:
 		u -= c[3]
@@ -613,6 +634,7 @@ func visible() -> Array:
 		var d := Vector2(a.pos.x - p.pos.x, a.pos.z - p.pos.z).length()
 		var clear := 1 if absf(a.pos.y - p.pos.y) < 2.5 and Plan.los(p.L, p.pos.x, p.pos.z, a.pos.x, a.pos.z) else 0
 		var light := light_on(a.L, a.pos, d)
+		if clear == 1: a.seen_t = t
 		out.append([rad_to_deg(atan(sx)), rad_to_deg(atan(sy)), d, clear, a.id, 1 if a.hostile else 0, r2(light), a.pose, 1 if a.objective else 0, sx / tan_x * 12.0, sy / tan_y * 9.0, 1 if t - a.muzzle_t < 1.5 else 0, a.group])
 	return out
 

@@ -32,6 +32,7 @@ var hit_t := -9.0
 var speed := 0.0             # for the animation
 var avatar := 0
 var seen_t := -1.0
+var repath_t := 0.0
 # visuals
 var vis := {}
 var node: Node3D

@@ -8,7 +8,9 @@ func _init() -> void:
 	Plan.load_level()
 	var lv := Level.new(); lv.quality = "none"; lv.lamps_only(Plan.raw)
 	var g := Game.new(); g.setup(lv, false)
+	g.enc_gate = float(args.get("gate", str(g.enc_gate))); g.enc_min = float(args.get("emin", str(g.enc_min))); g.enc_span = float(args.get("espan", str(g.enc_span))); g.enc_serial = args.get("serial", "1" if g.enc_serial else "0") == "1"
 	var bot := Bot.new(g, int(args.get("seed", "1")))
+	var f_log: FileAccess = FileAccess.open(String(args["prefix"]) + "_log.jsonl", FileAccess.WRITE) if args.has("prefix") else null
 	var minutes := float(args.get("minutes", "10"))
 	var n := int(minutes * 600.0)
 	var dark := 0; var terrace := 0; var nvis := 0; var t0 := Time.get_ticks_msec()
@@ -20,6 +22,7 @@ func _init() -> void:
 		if Plan.outdoor_at(g.player.L, g.player.pos.x, g.player.pos.z): terrace += 1
 		nvis += (rec["vis"] as Array).size()
 		if args.has("out"): recs.append(rec)
+		if f_log: f_log.store_line(JSON.stringify(rec))
 	var ev := bot.ev; var h := minutes / 60.0
 	var ct: Array = []
 	for c in ev["calls"]: ct.append(c[0])
@@ -40,6 +43,10 @@ func _init() -> void:
 	print("  stair crossings/h %.0f (ambush %.0f%%)  stair choices/h %.0f" % [ev["outcomes"].size() / h, 100.0 * amb / maxf(1, ev["outcomes"].size()), ev["stairs"].size() / h])
 	print("  dark %.1f%%  terrace %.1f%%  homing walks/h %.0f (home %.0f)  blackouts/h %.0f" % [100.0 * dark / n, 100.0 * terrace / n, ev["homing"].size() / h, homes / h, ev["blackouts"].size() / 2.0 / h])
 	print("  people in view per frame %.2f  shots/h %.0f  kills/h %.0f  doors stale/h %.0f" % [float(nvis) / n, ev["shots"].size() / h, ev["kills"].size() / h, ev["stale"].size() / h])
+	print("  director held back (s): ", g.why)
+	if f_log:
+		f_log.close()
+		var fe := FileAccess.open(String(args["prefix"]) + "_events.json", FileAccess.WRITE); fe.store_string(JSON.stringify(ev)); fe.close()
 	if args.has("stuck"):
 		for q in bot.stuck_log: print(q)
 	if args.has("out"):
