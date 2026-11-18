@@ -65,3 +65,13 @@ hour has about 10 deaths rather than 40; the round leaves the barrel before the 
 The harness renders with a lighter preset than the game you play (no GI bounce, no lamp shadows or
 screen-space reflections, sky ambient instead), because this machine has no GPU: about 0.3 s a frame
 on a software rasteriser. On a real GPU the same command can render the full-quality game.
+
+### What round 12 measured (12 rendered runs, one hour)
+
+Calls 297 an hour with a 9.4 s median gap; 99 stair crossings; 23 usable homing walks; dark 11%;
+terrace 13%; 6 deaths. Stairwell learning from striatal BOLD became recoverable (r 0.08 → 0.43) and
+the puzzles read from behaviour improved, navigation held, but decisions from BOLD got worse
+(drift-diffusion boundary 0.38 → 0.02): halving the number of calls cost more than spacing them
+gained. V1 spatial-frequency recovery also fell (0.46 → 0.29) for reasons not yet tested. Next: groups
+about 6 s apart, and renders with the view model hidden to see what moved spatial frequency. Full
+tables are in the BOLDBLASTER README and dashboard.
