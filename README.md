@@ -13,6 +13,8 @@ them out. Every mechanic runs inside the same fight:
 - an open atrium, a ballroom and a terrace (grid code), varied lighting and PBR materials (early
   visual models)
 
+![Six views of the Godot build: the lobby under the atrium, the galleries with their light lines, the pool terrace at dusk, the ballroom, a corridor in a blackout by torchlight, the front of the hotel](docs/godot.jpg)
+
 There are two builds of the same hotel and the same rules:
 
 | | Where | What it is |
