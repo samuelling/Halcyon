@@ -43,3 +43,25 @@ Shoot-or-hold calls 300+, stairwell choices 100+, door changes met 60+, homing w
   screen position and role, distance to walls, light level, room) and as events (calls, choices,
   outcomes, door changes met, blackouts, objectives).
 - Assets: CC0 (Poly Haven, ambientCG) where possible. Characters are the exception (see README).
+
+## Round 12: the Godot build
+
+Round 11 said the hotel worked for navigation and spatial memory and for the puzzles read from
+behaviour, and that the decisions were too crowded for BOLD. The Godot build keeps the building and
+the rules and changes what round 11 asked for:
+
+| Round 11 finding | Change | Logic-only check (3 seeds x 20 min) |
+|---|---|---|
+| every person was a call, 2.8 s apart | a group is one call (all armed or none, one pose); one unseen group at a time; no new group within 4.5 s of a call or on the stairs | calls about 280 an hour, median gap about 10 s |
+| 82 stair crossings an hour | every guest waits upstairs; every landing ends in an ambush (two gunmen ahead) or a supply crate | 110-130 an hour |
+| dark 20% of the time, 18 usable homing walks | the power fails 1.5-3.5 s after a pickup (p = 0.85) and returns when you reach the flight you came by, 22 s at most | dark about 10%, 24-30 walks an hour, 15-21 reaching home |
+| terrace 6% of the time | three rescues in five leave by the far end of the pool terrace | about 10% |
+| low contrast range, few salient onsets | real lamps, sun, neon and shadow; groups of up to five bystanders who walk on past you once the call is over | measured in round 12's renders |
+
+Other changes: who is armed is told by the hands alone (every role draws from one pool of avatars);
+hostile groups are 1-3 strong, bystander groups 1-5; health returns after six quiet seconds, so an
+hour has about 10 deaths rather than 40; the round leaves the barrel before the muzzle climbs.
+
+The harness renders with a lighter preset than the game you play (no GI bounce, no lamp shadows or
+screen-space reflections, sky ambient instead), because this machine has no GPU: about 0.3 s a frame
+on a software rasteriser. On a real GPU the same command can render the full-quality game.

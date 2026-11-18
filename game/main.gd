@@ -18,6 +18,7 @@ var playing := false
 var sens := 0.0022
 var torch_latch := false
 var use_latch := false
+var snap_n := 0
 var us_tick := 0
 var us_draw := 0
 var us_tick_last := 0
@@ -116,6 +117,12 @@ func _process(delta: float) -> void:
 	elif mode == "bot":
 		var dt := minf(delta, 0.05)
 		bot.tick(dt); bot.record(); _level_step(dt); hud.update(dt)
+	if args.has("snap") and (mode == "bot" or mode == "play"):
+		snap_n += 1
+		if snap_n % int(args["snap"]) == 0:
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png("res://shots/snap_%s%d.png" % [mode, snap_n / int(args["snap"])])
+			if snap_n >= int(args["snap"]) * int(args.get("snaps", "1")): get_tree().quit()
 
 # ------------------------------------------------------------------------------ the scanner harness
 func _scan() -> void:

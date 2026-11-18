@@ -101,7 +101,7 @@ func update(_dt: float) -> void:
 	else:
 		obj.text = ""; obj_sub.text = ""
 	var ta := clampf(1.0 - (game.t - toast_t - 2.2) * 2.0, 0.0, 1.0)
-	toast.modulate = Color(1, 1, 1, ta)
+	toast.modulate = Color(1, 1, 1, 0.0 if card.visible else ta)
 	pm.set_shader_parameter("hurt", clampf(1.0 - (game.t - game.hurt_t) * 2.0, 0.0, 1.0))
 	pm.set_shader_parameter("low", clampf((45.0 - p.hp) / 45.0, 0.0, 1.0))
 	pm.set_shader_parameter("dark", 1.0 if game.power < 0.5 else 0.0)

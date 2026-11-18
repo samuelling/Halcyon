@@ -94,8 +94,9 @@ func update(dt: float, inp: Game.Inp) -> void:
 	var rl := 0.0
 	if p.reload_t > 0.0: rl = sin(clampf((1.5 - p.reload_t) / 1.5, 0.0, 1.0) * PI)
 	var run := 1.0 if p.run else 0.0
-	var lp := Vector3(0.15 * (1.0 - a) + bx + p.sway.x * 0.04, -0.17 + 0.105 * a + by + p.sway.y * 0.03 - rl * 0.1 - run * 0.05 - retract * 0.06, -0.46 + 0.06 * a + p.kick * 1.6 + retract * 0.16)
-	var lb := Basis.from_euler(Vector3(-p.sway.y * 0.3 - run * 0.3 + rl * 0.35 + retract * 0.9, PI / 2.0 + p.sway.x * 0.3 + run * 0.4 - rl * 0.25, p.kick * 4.0 + rl * 0.3), EULER_ORDER_YXZ)
+	var lp := Vector3(0.105 * (1.0 - a) + bx + p.sway.x * 0.04, -0.15 + 0.085 * a + by + p.sway.y * 0.03 - rl * 0.1 - run * 0.05 - retract * 0.06, -0.5 + 0.06 * a + p.kick * 1.6 + retract * 0.16)
+	# view-space pitch, then the turn that lays the barrel (+x) along the view, then the muzzle climb about the gun's own z
+	var lb := Basis(Vector3.RIGHT, -p.sway.y * 0.3 - run * 0.3 - rl * 0.35 + retract * 0.9) * Basis(Vector3.UP, PI / 2.0 + p.sway.x * 0.3 + run * 0.4 - rl * 0.25 - 0.05 * (1.0 - a)) * Basis(Vector3.BACK, p.kick * 4.0)
 	var ct := cam.global_transform
 	pistol.global_transform = ct * Transform3D(lb, lp)
 	if slide: slide.position.x = slide_x - minf(0.03, p.kick * 0.9)
