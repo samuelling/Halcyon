@@ -56,7 +56,7 @@ func lamps_only(raw: Dictionary) -> void:
 func _build_env() -> void:
 	env = Environment.new()
 	var sky := Sky.new(); var pm := PanoramaSkyMaterial.new()
-	pm.panorama = load("res://assets/hdri/qwantani_late_afternoon_puresky.hdr"); pm.energy_multiplier = 1.0
+	pm.panorama = load("res://assets/hdri/qwantani_late_afternoon_puresky.hdr"); pm.energy_multiplier = 0.32   # dusk: the sky keeps its colour, the lamps and the neon carry the light
 	sky.sky_material = pm; sky.radiance_size = Sky.RADIANCE_SIZE_256
 	env.background_mode = Environment.BG_SKY; env.sky = sky; env.sky_rotation = Vector3(0, PI, 0)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY; env.ambient_light_sky_contribution = 1.0
@@ -64,7 +64,7 @@ func _build_env() -> void:
 	env.tonemap_mode = 4 if ClassDB.class_has_enum("Environment", "ToneMapper") else Environment.TONE_MAPPER_FILMIC   # AgX
 	env.tonemap_exposure = 1.0; env.tonemap_white = 6.0
 	var hi := quality == "high"
-	env.ambient_light_energy = 0.55 if hi else 0.5
+	env.ambient_light_energy = 0.9 if hi else 0.8
 	env.sdfgi_enabled = hi
 	env.sdfgi_use_occlusion = true; env.sdfgi_read_sky_light = true; env.sdfgi_bounce_feedback = 0.45
 	env.sdfgi_cascades = 4; env.sdfgi_min_cell_size = 0.25; env.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_75_PERCENT
@@ -72,27 +72,27 @@ func _build_env() -> void:
 	env.ssao_enabled = true; env.ssao_radius = 1.2; env.ssao_intensity = 2.2; env.ssao_power = 1.6; env.ssao_light_affect = 0.25 if hi else 0.6
 	env.ssil_enabled = hi; env.ssil_radius = 4.0; env.ssil_intensity = 1.2
 	env.ssr_enabled = hi; env.ssr_max_steps = 56; env.ssr_fade_in = 0.15; env.ssr_fade_out = 2.0; env.ssr_depth_tolerance = 0.3
-	env.glow_enabled = true; env.glow_intensity = 0.9; env.glow_strength = 1.0; env.glow_bloom = 0.04; env.glow_hdr_threshold = 1.1
+	env.glow_enabled = true; env.glow_intensity = 0.55; env.glow_strength = 1.0; env.glow_bloom = 0.02; env.glow_hdr_threshold = 1.5
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
 	env.set_glow_level(1, 0.2); env.set_glow_level(2, 0.6); env.set_glow_level(3, 0.9); env.set_glow_level(4, 0.7); env.set_glow_level(5, 0.5); env.set_glow_level(6, 0.3)
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.0055; env.volumetric_fog_albedo = Color(0.92, 0.9, 0.86); env.volumetric_fog_anisotropy = 0.55
+	env.volumetric_fog_density = 0.0045; env.volumetric_fog_albedo = Color(0.92, 0.9, 0.86); env.volumetric_fog_anisotropy = 0.55
 	env.volumetric_fog_length = 70.0; env.volumetric_fog_detail_spread = 2.0; env.volumetric_fog_gi_inject = 0.6; env.volumetric_fog_ambient_inject = 0.25
 	env.volumetric_fog_temporal_reprojection_enabled = hi; env.volumetric_fog_sky_affect = 0.25
 	env.adjustment_enabled = true; env.adjustment_contrast = 1.06; env.adjustment_saturation = 1.08
 	var we := WorldEnvironment.new(); we.environment = env; add_child(we)
 	cam_attr = CameraAttributesPractical.new()
-	cam_attr.auto_exposure_enabled = true; cam_attr.auto_exposure_scale = 0.32; cam_attr.auto_exposure_speed = 1.6
-	cam_attr.auto_exposure_min_sensitivity = 80.0; cam_attr.auto_exposure_max_sensitivity = 340.0
+	cam_attr.auto_exposure_enabled = true; cam_attr.auto_exposure_scale = 0.2; cam_attr.auto_exposure_speed = 1.6
+	cam_attr.auto_exposure_min_sensitivity = 90.0; cam_attr.auto_exposure_max_sensitivity = 260.0
 	we.camera_attributes = cam_attr
 	sun = DirectionalLight3D.new()
 	var el := deg_to_rad(SUN_ELEV); var sd := Vector3(SUN_DIR.x * cos(el), sin(el), SUN_DIR.z * cos(el)).normalized()
 	add_child(sun)
 	sun.look_at_from_position(sd * 100.0, Vector3.ZERO, Vector3.UP)
-	sun.light_color = Color(1.0, 0.82, 0.62); sun.light_energy = 3.4; sun.light_angular_distance = 0.6
+	sun.light_color = Color(1.0, 0.72, 0.5); sun.light_energy = 1.3; sun.light_angular_distance = 0.6
 	sun.shadow_enabled = true; sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	sun.directional_shadow_max_distance = 90.0; sun.shadow_bias = 0.04; sun.shadow_normal_bias = 1.2; sun.directional_shadow_blend_splits = true
-	sun.light_volumetric_fog_energy = 4.0
+	sun.light_volumetric_fog_energy = 1.6
 	sun.light_bake_mode = Light3D.BAKE_STATIC
 
 # ---------------------------------------------------------------------------------------- materials
@@ -284,7 +284,7 @@ func step(dt: float, L: int, on_ramp: bool, eye: Vector3) -> void:
 			(r["node"] as Node3D).visible = r["open"] or r["L"] == L or (on_ramp and absi(r["L"] - L) <= 1)
 		for s in signs: s["light"].light_energy = s["e"] * (0.25 + 0.75 * power)
 		# without the GI bounce (the light preset) the sky's ambient stands in for it indoors, and dies with the lamps
-		if not env.sdfgi_enabled: env.ambient_light_energy = 0.5 * (0.1 + 0.9 * power)
+		if not env.sdfgi_enabled: env.ambient_light_energy = 0.8 * (0.12 + 0.88 * power)
 	if quality == "high" and Engine.get_frames_drawn() % 6 == 0: _shadow_budget(eye)
 
 func _shadow_budget(eye: Vector3) -> void:
