@@ -109,3 +109,10 @@ itself recover the decision parameters from BOLD (boundary r 0.20 ± 0.15 agains
 9.7 s); hours do. The first-person arms cost the V1 fit nothing; fog and bloom cost about a quarter
 of the frame contrast and some of the spatial-frequency fit (peak r 0.20 with, 0.26 without, 20
 minutes). `nofog=1 noglow=1` on the harness command renders without them.
+
+After round 13 the fog density and the bloom were both halved in all three levels (hotel fog 0.0045
+to 0.0022, gardens 0.003 to 0.0015, service level 0.011 to 0.0055; bloom intensity 0.55 to 0.28).
+On the same four playthroughs that gives 14% more frame contrast in every band, a little under half
+of what removing them gives (31-38%), and a spatial-frequency peak r of 0.22, between the two.
+`fogk=2 glowk=2` restores the round 12 and 13 air for a paired render; with them the current build
+matches the round 13 frames to within 2%, so the closed-hands fix is not part of the gain.

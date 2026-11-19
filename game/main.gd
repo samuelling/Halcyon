@@ -38,6 +38,9 @@ func _ready() -> void:
 	level.build(args.get("q", "scan" if mode == "scan" else "high"))
 	game = Game.new(); add_child(game); game.setup(level, true)
 	view = View.new(); add_child(view); view.setup(game); game.view = view
+	# haze knobs for paired renders: fogk=2 glowk=2 gives the air and bloom of rounds 12 and 13
+	if args.has("fogk"): level.env.volumetric_fog_density *= float(args["fogk"])
+	if args.has("glowk"): level.env.glow_intensity *= float(args["glowk"]); level.env.glow_bloom *= float(args["glowk"])
 	fx = Fx.new(); add_child(fx); fx.setup(game, view, mode == "scan" or mode == "shots"); game.fx = fx
 	var vs := get_viewport().get_visible_rect().size; game.aspect = vs.x / vs.y
 	if mode == "play" or mode == "bot":

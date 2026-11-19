@@ -77,11 +77,11 @@ func _build_env() -> void:
 	env.ssao_enabled = true; env.ssao_radius = 1.2; env.ssao_intensity = 2.2; env.ssao_power = 1.6; env.ssao_light_affect = 0.25 if hi else 0.6
 	env.ssil_enabled = hi; env.ssil_radius = 4.0; env.ssil_intensity = 1.2
 	env.ssr_enabled = hi; env.ssr_max_steps = 56; env.ssr_fade_in = 0.15; env.ssr_fade_out = 2.0; env.ssr_depth_tolerance = 0.3
-	env.glow_enabled = true; env.glow_intensity = 0.55; env.glow_strength = 1.0; env.glow_bloom = 0.02; env.glow_hdr_threshold = 1.5
+	env.glow_enabled = true; env.glow_intensity = 0.28; env.glow_strength = 1.0; env.glow_bloom = 0.01; env.glow_hdr_threshold = 1.5
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
 	env.set_glow_level(1, 0.2); env.set_glow_level(2, 0.6); env.set_glow_level(3, 0.9); env.set_glow_level(4, 0.7); env.set_glow_level(5, 0.5); env.set_glow_level(6, 0.3)
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.0045; env.volumetric_fog_albedo = Color(0.92, 0.9, 0.86); env.volumetric_fog_anisotropy = 0.55
+	env.volumetric_fog_density = 0.0022; env.volumetric_fog_albedo = Color(0.92, 0.9, 0.86); env.volumetric_fog_anisotropy = 0.55
 	env.volumetric_fog_length = 70.0; env.volumetric_fog_detail_spread = 2.0; env.volumetric_fog_gi_inject = 0.6; env.volumetric_fog_ambient_inject = 0.25
 	env.volumetric_fog_temporal_reprojection_enabled = hi; env.volumetric_fog_sky_affect = 0.25
 	env.adjustment_enabled = true; env.adjustment_contrast = 1.06; env.adjustment_saturation = 1.08
@@ -102,11 +102,11 @@ func _build_env() -> void:
 	var sk: String = Plan.meta.get("sky", "dusk")
 	if sk == "day":        # the gardens: a bright late afternoon
 		pm.energy_multiplier = 1.0; sun.light_energy = 3.0; sun.light_color = Color(1.0, 0.86, 0.68)
-		env.ambient_light_energy = 1.0; amb_base = 1.0; env.volumetric_fog_density = 0.003; cam_attr.auto_exposure_scale = 0.24
+		env.ambient_light_energy = 1.0; amb_base = 1.0; env.volumetric_fog_density = 0.0015; cam_attr.auto_exposure_scale = 0.24
 	elif sk == "none":     # the service level: no daylight at all, cold tube light, murky air
 		pm.energy_multiplier = 0.02; sun.light_energy = 0.0; sun.shadow_enabled = false; sun.light_volumetric_fog_energy = 0.0
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color(0.55, 0.62, 0.7)
-		env.ambient_light_energy = 0.22; amb_base = 0.22; env.volumetric_fog_density = 0.011; env.volumetric_fog_albedo = Color(0.8, 0.86, 0.9)
+		env.ambient_light_energy = 0.22; amb_base = 0.22; env.volumetric_fog_density = 0.0055; env.volumetric_fog_albedo = Color(0.8, 0.86, 0.9)
 
 # ---------------------------------------------------------------------------------------- materials
 func tex(name: String, kind: String) -> Texture2D:
