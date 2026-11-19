@@ -101,3 +101,11 @@ A level is a page of code in `game/levelgen.gd`: rooms, edges (hedge, wall, low 
 security door, window), flights, lamps, props, and a table of where you start, the ways out and
 where guests wait. `Level._build_native` raises the walls, floors, ceilings and steps from that
 plan. The models that need stairs or blackouts simply have no trials in the gardens.
+
+### What round 13 measured
+
+Pacing: a call about every 6 s (the default now) gives about 420 calls an hour. It does not by
+itself recover the decision parameters from BOLD (boundary r 0.20 ± 0.15 against 0.11 ± 0.14 at
+9.7 s); hours do. The first-person arms cost the V1 fit nothing; fog and bloom cost about a quarter
+of the frame contrast and some of the spatial-frequency fit (peak r 0.20 with, 0.26 without, 20
+minutes). `nofog=1 noglow=1` on the harness command renders without them.
