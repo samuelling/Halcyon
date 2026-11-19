@@ -104,7 +104,7 @@ func _build_env() -> void:
 		pm.energy_multiplier = 1.0; sun.light_energy = 3.0; sun.light_color = Color(1.0, 0.86, 0.68)
 		env.ambient_light_energy = 1.0; amb_base = 1.0; env.volumetric_fog_density = 0.003; cam_attr.auto_exposure_scale = 0.24
 	elif sk == "none":     # the service level: no daylight at all, cold tube light, murky air
-		pm.energy_multiplier = 0.02; sun.visible = false
+		pm.energy_multiplier = 0.02; sun.light_energy = 0.0; sun.shadow_enabled = false; sun.light_volumetric_fog_energy = 0.0
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color(0.55, 0.62, 0.7)
 		env.ambient_light_energy = 0.22; amb_base = 0.22; env.volumetric_fog_density = 0.011; env.volumetric_fog_albedo = Color(0.8, 0.86, 0.9)
 
@@ -590,7 +590,7 @@ func _build_native() -> void:
 		var st: SurfaceTool = _n_st[name]; st.generate_tangents()
 		var target := glass if name == "glass" else solid
 		st.commit(target)
-		var mat: Material = plain(name) if name in ["glass", "steel", "brass", "trim"] else surf_mat(name, Color(0.5, 0.68, 0.38) if name == "forest_leaves_02" else Color.WHITE)
+		var mat: Material = plain(name) if name in ["glass", "steel", "brass", "trim"] else surf_mat(name, Color(0.5, 0.68, 0.38) if name == "forest_leaves_02" else (Color(0.62, 0.82, 0.48) if name == "leafy_grass" else Color.WHITE))
 		target.surface_set_material(target.get_surface_count() - 1, mat)
 	var mi := MeshInstance3D.new(); mi.mesh = solid; mi.name = "Building"; mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED; add_child(mi)
 	if glass.get_surface_count() > 0:
@@ -600,7 +600,7 @@ func _build_native() -> void:
 func _build_native_outside() -> void:
 	if Plan.meta.get("sky", "") == "day":      # the country beyond the garden wall
 		var m := MeshInstance3D.new(); var pl := PlaneMesh.new(); pl.size = Vector2(700, 700); m.mesh = pl
-		m.material_override = surf_mat("leafy_grass", Color(0.8, 0.85, 0.7), Vector3(180, 180, 1)); m.position = Vector3(0, -0.04, 0); add_child(m)
+		m.material_override = surf_mat("leafy_grass", Color(0.6, 0.78, 0.46), Vector3(180, 180, 1)); m.position = Vector3(0, -0.04, 0); add_child(m)
 	var cols := {"green": Color(0.15, 1.0, 0.45), "pink": Color(1.0, 0.16, 0.55), "cyan": Color(0.1, 0.9, 1.0), "amber": Color(1.0, 0.6, 0.12)}
 	for q: Array in Plan.meta.get("signs", []): neon(q[0], Vector3(q[1], q[2], q[3]), q[4], cols[q[5]], q[6], "Rajdhani-SemiBold", 1.2)
 

@@ -42,9 +42,22 @@ https://samuelling.github.io/Halcyon/; locally `python3 -m http.server` here).
   clothes: every role draws from the same pool of people
 - health comes back after six quiet seconds; first aid and ammunition wait at safe landings
 
+**Three places to play** (keys 1, 2, 3 on the title card; `level=hotel|gardens|service` for the bot and harness):
+
+| Level | What it is | What it asks of you |
+|---|---|---|
+| The hotel | three floors round an atrium, a terrace over the sea, dusk | the full game: stairs with hidden risk, security doors, blackouts |
+| The gardens | open ground: lawns, hedges, low walls, four pavilions, late-afternoon sun | long sight lines and long shots; people are seen coming from 25 m and more; no stairs, no blackouts |
+| The service level | two floors of 2 m corridors and small rooms under the hotel, cold tube light | tight quarters: every corner is close, thirteen security doors, four narrow flights, frequent blackouts |
+
+The hotel is exported from the browser build's generator; the other two are made in code
+(`game/levelgen.gd`) and their geometry is built from the plan (`Level._build_native`), so a new
+level is a page of GDScript: rooms, edges, flights, lamps, props, and a small table saying where
+you start, the ways out, and where guests wait.
+
 **Layout:**
-- `game/` GDScript: `plan.gd` (walkable plan, sight lines, routes), `level.gd` (building, lights, sky,
-  sea, neon), `game.gd` (player, pistol, director, logging), `actor.gd`, `chars.gd` (avatars,
+- `game/` GDScript: `plan.gd` (walkable plan, sight lines, routes), `levelgen.gd` (the gardens and the
+  service level), `level.gd` (building, lights, sky, sea, neon), `game.gd` (player, pistol, director, logging), `actor.gd`, `chars.gd` (avatars,
   retargeted animation, arm IK), `view.gd` (first-person body and pistol), `fx.gd`, `hud.gd`,
   `bot.gd` (the simulated player), `sim.gd` (headless logic runs), `main.gd`
 - `level/` the building exported from the browser build's generator (`tools/export_level.mjs`)
