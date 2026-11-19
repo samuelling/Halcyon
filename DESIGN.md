@@ -75,3 +75,29 @@ the puzzles read from behaviour improved, navigation held, but decisions from BO
 gained. V1 spatial-frequency recovery also fell (0.46 → 0.29) for reasons not yet tested. Next: groups
 about 6 s apart, and renders with the view model hidden to see what moved spatial frequency. Full
 tables are in the BOLDBLASTER README and dashboard.
+
+## More places: the gardens and the service level
+
+The hotel alone gives one kind of space: rooms and corridors of middling size at dusk. Two more
+levels widen what an hour contains, for the eye and for the play.
+
+| | The hotel | The gardens | The service level |
+|---|---|---|---|
+| Space | three floors, atrium, terrace | one open ground, 56 m square | two floors of 2 m corridors and small rooms |
+| Light | dusk, lamps and neon | late-afternoon sun | cold tubes, some dead; no daylight |
+| Sight lines | 5-25 m | 25-50 m | 2-15 m |
+| Gunmen stop and fight at | 12 m | 17 m | 9 m, and react in half the time |
+| Stairs (hidden risk) | six flights | none | four narrow flights |
+| Security doors | 22 | none | 13 |
+| Blackouts | after most pickups upstairs | none | after most pickups upstairs |
+| Where guests wait | upstairs rooms | four pavilions | upstairs stores |
+
+Logic-only checks (20 minutes, two seeds): the gardens give 72-75 rescues and 440-480 calls an hour
+with 1.4-1.6 people in view per frame, and about three times the hotel's wrong kills (telling a
+phone from a pistol at 25 m is hard); the service level gives 45-48 rescues, 90-96 stair crossings
+and 36-39 walks home in the dark an hour.
+
+A level is a page of code in `game/levelgen.gd`: rooms, edges (hedge, wall, low wall, door,
+security door, window), flights, lamps, props, and a table of where you start, the ways out and
+where guests wait. `Level._build_native` raises the walls, floors, ceilings and steps from that
+plan. The models that need stairs or blackouts simply have no trials in the gardens.
