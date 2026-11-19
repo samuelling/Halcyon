@@ -116,3 +116,28 @@ On the same four playthroughs that gives 14% more frame contrast in every band, 
 of what removing them gives (31-38%), and a spatial-frequency peak r of 0.22, between the two.
 `fogk=2 glowk=2` restores the round 12 and 13 air for a paired render; with them the current build
 matches the round 13 frames to within 2%, so the closed-hands fix is not part of the gain.
+
+### First-person hands
+
+The first Godot hands copied their grip from an aim clip made for another skeleton: the support hand
+hung open, palm up, and the pistol floated above the shooting hand. They are now built from the
+pistol's own shape (`View._grip`, `View.CURL`):
+
+- **Grip.** The shooting hand's palm lies on the right of the grip, its fingers square to the raked grip
+  and wrapped round the front strap, index finger on the trigger, thumb over the top onto the left side.
+  The support hand's palm covers the left panel, its wrist low, its fingers round the front of the
+  shooting fingers, its thumb forward along the frame. Finger curl is set joint by joint.
+- **Reach and wrists.** The shoulders come forward towards the hands and the arm roots sit a little lower
+  and further forward than a real body's (out of the camera's sight, and not when looking down), so both
+  hands always reach. Each forearm rolls with its hand (`Chars.untwist_forearm`), so the wrists are not
+  wrung and the skin no longer shows through the cuffs.
+- **Framing.** The raked grip puts each wrist in front of its hand on the line of sight. At the hip the
+  pistol therefore rides muzzle-up and leans a little left, which turns the backs of the hands to the
+  eye. The arms and pistol are drawn through a narrower lens than the world (58 against 72 degrees,
+  applied across the view axis only, so depth, light and the sights are untouched). Aiming zooms the
+  world but not the arms; their lens widens to 70 instead.
+- **Player.** The player is now Business_Male_06 in shirt sleeves (still drawn for no one else). The suit
+  jacket's sleeves filled the bottom third of the frame and hid the hands at any hold.
+
+Scanner frames rendered from here on show the new arms. Every round 12 and 13 frame shows the old ones.
+

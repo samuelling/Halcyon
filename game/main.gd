@@ -4,6 +4,9 @@ extends Node3D
 ##   scan=<prefix> seed=N frames=M        BOLDBLASTER harness: 384x288 render, 192x144 frames + log + events
 ##   shots=<name>,<x>,<y>,<z>,<yaw>,<pitch>[,<ortho size>];...   stills for checking the look
 ##   level=hotel|gardens|service   q=high|scan   people=1 (stage some people for stills)   dark=1
+##   for the hands, with shots: ads=1  walk=<m/s>  reload=<s>  orbit=<az>,<el>,<dist>|... (outside views in the
+##   pistol's frame, saved as <name>_o<i>)  hidehand=L|R  gripdbg=1 (how far each hand falls short of its grip)
+##   vm_<key>=<value> (the hold and arm settings in View.tune)  vm_fov=  vm_fov_ads=  (the arms' lens)
 
 static var level_name := ""      # survives a scene reload: the title card switches level by reloading
 var level: Level
@@ -184,10 +187,31 @@ func _shots() -> void:
 			for a in game.actors: a.t += 0.1; a.sync(0.1)
 			var inp := Game.Inp.new(); inp.ads = args.has("ads")
 			p.ads = 1.0 if args.has("ads") else 0.0
+			if args.has("walk"): p.vel = Vector3(-sin(p.yaw), 0, -cos(p.yaw)) * float(args["walk"])   # walk=<m/s>: the legs and the bob, standing still
+			if args.has("reload"): p.reload_t = float(args["reload"])   # reload=<s left of 1.5>: the left hand at the magazine
 			view.update(0.1, inp); _level_step(0.1); fx.update(0.1)
 			await get_tree().process_frame
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("res://shots/%s.png" % f[0])
+		if args.has("gripdbg"):
+			view.rig.transform = Transform3D.IDENTITY
+			var B: Dictionary = view.body["bones"]; var sk: Skeleton3D = view.body["sk"]; var pt0 := view.pistol.global_transform.orthonormalized()
+			for hh in [["RightHand", view.w_r, "RightUpperArm"], ["LeftHand", view.w_l, "LeftUpperArm"]]:
+				var got := Chars.bone_world(sk, B[hh[0]]); var want: Vector3 = pt0 * (hh[1] as Vector3)
+				print(hh[0], " miss ", snappedf(got.distance_to(want), 0.001), " in pistol frame ", (pt0.affine_inverse() * got - (hh[1] as Vector3)).snappedf(0.001), " shoulder-target ", snappedf(Chars.bone_world(sk, B[hh[2]]).distance_to(want), 0.001))
+		if args.has("orbit"):   # orbit=<azimuth>,<elevation>,<distance>|...: outside views of the hands, in the pistol's frame
+			var oc := Camera3D.new(); oc.near = 0.01; oc.fov = 40.0; add_child(oc)
+			view.rig.transform = Transform3D.IDENTITY   # outside views see the hands as they are, not as the lens draws them
+			if args.has("hidehand"): (view.body["sk"] as Skeleton3D).set_bone_pose_scale(view.body["bones"]["LeftHand" if args["hidehand"] == "L" else "RightHand"], Vector3.ONE * 0.001)
+			var pt := view.pistol.global_transform.orthonormalized(); var c0 := pt * Vector3(-0.01, -0.005, 0.0)
+			var on := 0
+			for o in String(args["orbit"]).split("|"):
+				var q := o.split(","); var az := deg_to_rad(float(q[0])); var el := deg_to_rad(float(q[1])); var d := float(q[2])
+				var off := pt.basis * (Vector3(cos(el) * cos(az), sin(el), cos(el) * sin(az)) * d)
+				oc.look_at_from_position(c0 + off, c0, pt.basis.y); oc.make_current()
+				await get_tree().process_frame; await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png("res://shots/%s_o%d.png" % [f[0], on]); on += 1
+			view.cam.make_current(); oc.queue_free()
 		print("shot ", f[0], " ", Time.get_ticks_msec() - t0, " ms")
 	get_tree().quit()
 

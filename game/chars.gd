@@ -3,8 +3,8 @@ class_name Chars
 ## Universal Animation Library (CC0), plus the small procedural layer on top (aim, hands up, arm IK).
 
 const POOL := [["Female_Adult_01", "f001"], ["Female_Adult_05", "f005"], ["Female_Adult_08", "f008"], ["Male_Adult_02", "m003"], ["Male_Adult_04", "m006"],
-	["Male_Adult_06", "m011"], ["Male_Adult_11", "m001"], ["Business_Female_01", "f014"], ["Business_Male_02", "m008"], ["Business_Male_06", "m025"], ["Business_Male_01", "m005"]]
-const PLAYER := 10
+	["Male_Adult_06", "m011"], ["Male_Adult_11", "m001"], ["Business_Female_01", "f014"], ["Business_Male_02", "m008"], ["Business_Male_01", "m005"], ["Business_Male_06", "m025"]]
+const PLAYER := 10   # the last of the pool, never drawn for anyone else: shirt sleeves, which leave the hands on the pistol in view
 const DIR := "res://assets/avatars/"
 
 static var libs := {}
@@ -132,6 +132,15 @@ static func ik_arm(sk: Skeleton3D, upper: int, lower: int, hand: int, target: Ve
 	aim_bone(sk, upper, lower, wb * (elbow - a))
 	var e2 := sk.get_bone_global_pose(lower).origin
 	aim_bone(sk, lower, hand, wb * (a + dir * dist - e2))
+
+## Turn the forearm about its own length so the hand needs (almost) no twist against it: the forearm rolls with
+## the hand as a real one does, instead of the wrist being wrung like a sweet wrapper. Call before setting the hand.
+static func untwist_forearm(sk: Skeleton3D, lower: int, hand: int, hand_world: Basis, frac := 0.85) -> void:
+	var f := sk.get_bone_global_pose(lower).basis.orthonormalized()
+	var h := sk.global_transform.basis.orthonormalized().inverse() * hand_world.orthonormalized()
+	var d := (f.inverse() * h).get_rotation_quaternion() * sk.get_bone_rest(hand).basis.get_rotation_quaternion().inverse()
+	var tw := Quaternion(0.0, d.y, 0.0, d.w).normalized()   # the part of the hand's turn about the forearm's length (+y)
+	sk.set_bone_pose_rotation(lower, sk.get_bone_pose_rotation(lower) * Quaternion.IDENTITY.slerp(tw, frac))
 
 static func set_bone_world_basis(sk: Skeleton3D, b: int, world_basis: Basis) -> void:
 	var par := sk.get_bone_parent(b)
