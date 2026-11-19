@@ -19,12 +19,12 @@ var fingers := {}            # bone -> pose rotation in the grip
 # +X towards the thumb on the right hand and away from it on the left.
 const CURL := {
 	# fingers: [curl about x, spread about z]; + spread moves a right finger away from the thumb and a left one towards it
-	"Index":  {"R": [[4, -22], [46, 0], [30, 0]],   "L": [[46, 4], [70, 0], [44, 0]]},
-	"Middle": {"R": [[58, 0], [82, 0], [52, 0]],    "L": [[54, 0], [76, 0], [44, 0]]},
-	"Ring":   {"R": [[62, 4], [84, 0], [52, 0]],    "L": [[58, -4], [78, 0], [44, 0]]},
-	"Little": {"R": [[66, 8], [84, 0], [52, 0]],    "L": [[62, -8], [78, 0], [44, 0]]},
+	"Index":  {"R": [[4, -22], [46, 0], [30, 0]],   "L": [[46, 8], [70, 0], [44, 0]]},
+	"Middle": {"R": [[58, -2], [82, 0], [52, 0]],   "L": [[52, 1], [74, 0], [44, 0]]},
+	"Ring":   {"R": [[63, 7], [85, 0], [54, 0]],    "L": [[58, -6], [78, 0], [46, 0]]},
+	"Little": {"R": [[70, 15], [88, 0], [56, 0]],   "L": [[64, -13], [80, 0], [48, 0]]},
 	# thumbs: [across the palm towards the index, towards the palm]; the palm is -z on the right thumb, +z on the left
-	"Thumb":  {"R": [[22, -38], [0, -22], [0, -12]], "L": [[26, 6], [0, 4], [0, 0]]},
+	"Thumb":  {"R": [[22, -38], [0, -22], [0, -12]], "L": [[34, -8], [0, 6], [0, 4]]},
 }
 # The grip in the pistol's frame (+x along the barrel, +y up, +z to the shooter's right): where the middle
 # knuckle of each hand sits, and the direction of the grip (down its back strap, raked back).
@@ -45,7 +45,7 @@ var show_body := true
 # on the command line overrides one, vm_fov the lens.
 var tune := {"hx": 0.085, "hy": -0.135, "hz": -0.46, "ay": -0.084, "az": -0.56, "clav": 0.3, "pole": 1.2, "sdrop": 0.08, "sfwd": 0.04, "arm": 0.88, "tilt": 0.33, "cant": 0.15}
 var rig: Node3D               # holds the body and the pistol; squeezed towards the view axis so they are drawn as through a narrower lens
-var VM_FOV_ADS := 70.0      # aiming zooms the world (72 to 54) but not the arms: their lens widens instead, as in shooters
+var VM_FOV_ADS := 78.0      # aiming zooms the world (72 to 54) but not the arms: their lens widens instead, as in shooters
 var VM_FOV := 58.0          # the lens the arms and pistol are drawn with (the world's is 72): larger, less stretched hands
 
 func setup(g: Game) -> void:
@@ -81,6 +81,15 @@ func setup(g: Game) -> void:
 		else: k_off_l = ko
 	_grip()
 	pistol = Chars.make_pistol(); rig.add_child(pistol)
+	# your own hands and pistol are seen close and at a slant: sharper texture filtering for them alone
+	for root: Node in [n, pistol]:
+		for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+			for si in mi.mesh.get_surface_count():
+				var m := mi.get_active_material(si)
+				if m is BaseMaterial3D:
+					var m2 := (m as BaseMaterial3D).duplicate() as BaseMaterial3D
+					m2.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+					mi.set_surface_override_material(si, m2)
 	slide = pistol.find_child("service_pistol_slide_a", true, false)
 	if slide: slide_x = slide.position.x
 	flash = OmniLight3D.new(); flash.light_color = Color(1.0, 0.76, 0.42); flash.omni_range = 11.0; flash.light_energy = 0.0; flash.visible = false
@@ -132,7 +141,8 @@ func update(dt: float, inp: Game.Inp) -> void:
 	var n: Node3D = body["node"]; var sk: Skeleton3D = body["sk"]; var ap: AnimationPlayer = body["ap"]; var B: Dictionary = body["bones"]
 	var f := Vector3(-sin(p.yaw), 0, -cos(p.yaw))
 	n.visible = show_body
-	n.position = p.pos - f * 0.02; n.rotation.y = p.yaw + PI
+	# the body eases back as you look down, so the open collar stays behind the eye
+	n.position = p.pos - f * (0.02 + 0.17 * clampf((-p.pitch - 0.45) / 0.7, 0.0, 1.0)); n.rotation.y = p.yaw + PI
 	if sp > 3.6: _play("a/Jog_Fwd"); ap.speed_scale = clampf(sp / 3.6, 0.7, 1.5)
 	elif sp > 0.3: _play("a/Walk"); ap.speed_scale = clampf(sp / 1.45, 0.6, 2.0)
 	else: _play("a/Pistol_Idle"); ap.speed_scale = 1.0

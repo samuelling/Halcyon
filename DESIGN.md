@@ -135,9 +135,16 @@ pistol's own shape (`View._grip`, `View.CURL`):
   pistol therefore rides muzzle-up and leans a little left, which turns the backs of the hands to the
   eye. The arms and pistol are drawn through a narrower lens than the world (58 against 72 degrees,
   applied across the view axis only, so depth, light and the sights are untouched). Aiming zooms the
-  world but not the arms; their lens widens to 70 instead.
+  world but not the arms; their lens widens to 78 instead.
 - **Player.** The player is now Business_Male_06 in shirt sleeves (still drawn for no one else). The suit
   jacket's sleeves filled the bottom third of the frame and hid the hands at any hold.
+
+- **Tidying.** Looking down, the body eases back up to 17 cm, so the open collar (head and neck are
+  hidden) stays behind the eye and you see your shirt front and feet. When aiming, the arms' lens widens
+  to 78 degrees, which slims the forearms in the V and leaves the hands visible round the sights. The
+  fingers fan a little, with the little fingers curled furthest, and the support thumb lies clear along
+  the frame. Your own hands and pistol use anisotropic texture filtering (sharper at a slant on a real GPU;
+  the software renderer here ignores it).
 
 Scanner frames rendered from here on show the new arms. Every round 12 and 13 frame shows the old ones.
 
