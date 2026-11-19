@@ -31,7 +31,7 @@ func setup(g: Game) -> void:
 	var sk: Skeleton3D = body["sk"]; var ap: AnimationPlayer = body["ap"]; var B: Dictionary = body["bones"]
 	for mi: MeshInstance3D in n.find_children("*", "MeshInstance3D", true, false): mi.extra_cull_margin = 3.0
 	# learn the grip from the aim clip: how each hand sits relative to the line of the forearm
-	ap.play("a/Pistol_Aim_Neutral"); ap.advance(0.0)
+	ap.play("a/Pistol_Aim_Neutral", 0.0); ap.seek(0.3, true); ap.advance(0.05)   # the clip has to be applied before the grip is read off it
 	var hf := Chars.hand_frame(sk, B["RightHand"], B["RightLowerArm"])
 	var wb := sk.global_transform.basis.orthonormalized()
 	r_hand = hf.basis.inverse() * (wb * sk.get_bone_global_pose(B["RightHand"]).basis.orthonormalized())
@@ -94,7 +94,7 @@ func update(dt: float, inp: Game.Inp) -> void:
 	var rl := 0.0
 	if p.reload_t > 0.0: rl = sin(clampf((1.5 - p.reload_t) / 1.5, 0.0, 1.0) * PI)
 	var run := 1.0 if p.run else 0.0
-	var lp := Vector3(0.105 * (1.0 - a) + bx + p.sway.x * 0.04, -0.15 + 0.085 * a + by + p.sway.y * 0.03 - rl * 0.1 - run * 0.05 - retract * 0.06, -0.5 + 0.06 * a + p.kick * 1.6 + retract * 0.16)
+	var lp := Vector3(0.105 * (1.0 - a) + bx + p.sway.x * 0.04, -0.15 + 0.085 * a + by + p.sway.y * 0.03 - rl * 0.1 - run * 0.05 - retract * 0.06, -0.42 + 0.04 * a + p.kick * 1.6 + retract * 0.16)   # within easy reach: at full stretch the hands fall short of the grip
 	# view-space pitch, then the turn that lays the barrel (+x) along the view, then the muzzle climb about the gun's own z
 	var lb := Basis(Vector3.RIGHT, -p.sway.y * 0.3 - run * 0.3 - rl * 0.35 + retract * 0.9) * Basis(Vector3.UP, PI / 2.0 + p.sway.x * 0.3 + run * 0.4 - rl * 0.25 - 0.05 * (1.0 - a)) * Basis(Vector3.BACK, p.kick * 4.0)
 	var ct := cam.global_transform

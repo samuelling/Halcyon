@@ -50,6 +50,8 @@ https://samuelling.github.io/Halcyon/; locally `python3 -m http.server` here).
 | The gardens | open ground: lawns, hedges, low walls, four pavilions, late-afternoon sun | long sight lines and long shots; people are seen coming from 25 m and more; no stairs, no blackouts |
 | The service level | two floors of 2 m corridors and small rooms under the hotel, cold tube light | tight quarters: every corner is close, thirteen security doors, four narrow flights, frequent blackouts |
 
+![The gardens (top) and the service level (bottom)](docs/levels.jpg)
+
 The hotel is exported from the browser build's generator; the other two are made in code
 (`game/levelgen.gd`) and their geometry is built from the plan (`Level._build_native`), so a new
 level is a page of GDScript: rooms, edges, flights, lamps, props, and a small table saying where
