@@ -203,6 +203,6 @@ static func service(seed_ := 1) -> Dictionary:
 	var meta := {"name": "service", "title": "THE SERVICE LEVEL", "spawn": [0, b.cx(9), b.cz(2), PI], "respawn": [[0, b.cx(9), b.cz(2)], [0, b.cx(9), b.cz(1)]],
 		"exits": {"dock": {"label": "LOADING DOCK", "rect": [0, 9, 0, 9, 1], "nodes": [[0, 9, 0]]}, "lift": {"label": "LIFT LOBBY", "rect": [0, 16, 23, 16, 24], "nodes": [[0, 16, 24]]}},
 		"exit_cycle": ["lift", "dock"], "objective_kinds": ["store", "archive", "office", "linen"], "objective_min_L": 1, "blackout_p": 0.85, "blackout_min_L": 1,
-		"spawn_far": 0.0, "spawn_cells": 10, "stop_hostile": 9.0, "sky": "none",
+		"spawn_far": 0.0, "spawn_cells": 10, "stop_hostile": 9.0, "react_scale": 0.5, "sky": "none",
 		"signs": [["EXIT", b.cx(9), 2.9, b.cz(0) - 0.8, 0.0, "green", 0.34], ["LIFT", b.cx(16), 2.9, b.cz(24) + 0.8, PI, "green", 0.34]]}
 	return b.finish(meta)

@@ -391,7 +391,7 @@ func step_actors(dt: float) -> void:
 				a.sync(dt); continue
 		if a.hostile:
 			if sees and a.state == "idle": a.state = "alert"; a.alert_t = t
-			if a.state == "alert" and t - a.alert_t > a.react: a.state = "fight"
+			if a.state == "alert" and t - a.alert_t > a.react * float(Plan.meta["react_scale"]): a.state = "fight"
 			if a.state == "fight" or a.state == "alert": a.yaw = atan2(-dx, -dz)
 			if a.state == "fight" and sees:
 				a.fire_t -= dt

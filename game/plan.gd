@@ -42,7 +42,7 @@ const HOTEL_META := {
 		"terrace": {"label": "POOL TERRACE", "rect": [0, 4, 25, 23, 27], "nodes": [[0, 12, 25], [0, 15, 25]]}},
 	"exit_cycle": ["front", "terrace", "terrace", "front", "terrace"],
 	"objective_kinds": ["guestA", "guestB", "suite"], "objective_min_L": 1,
-	"blackout_p": 0.85, "blackout_min_L": 1, "spawn_far": 0.0, "spawn_cells": 10, "stop_hostile": 12.0, "sky": "dusk"}
+	"blackout_p": 0.85, "blackout_min_L": 1, "spawn_far": 0.0, "spawn_cells": 10, "stop_hostile": 12.0, "react_scale": 1.0, "sky": "dusk"}
 
 static func load_level(path := "res://level/level.json") -> Dictionary:
 	var txt := FileAccess.get_file_as_string(path)
