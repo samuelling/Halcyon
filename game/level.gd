@@ -31,17 +31,22 @@ var _mat_cache := {}
 var signs: Array = []
 var strip_mats := {}
 var t := 0.0
+var amb_base := 0.8        # ambient energy when there is no GI bounce (the light preset)
 
 func build(q := "high") -> void:
 	quality = q
 	var raw := Plan.raw
+	var native := not raw.has("surfaces")     # a level made by LevelGen: geometry comes from the plan
 	_build_env()
-	_build_surfaces(raw)
+	if native: _build_native()
+	else: _build_surfaces(raw)
 	_build_doors(raw)
 	_build_lamps(raw)
 	_build_props(raw)
-	_build_exterior()
-	_build_signs()
+	if native: _build_native_outside()
+	else:
+		_build_exterior()
+		_build_signs()
 	_find_windows()
 
 ## For the headless simulations: only what light_at needs (the lamp list and the windows), nothing drawn.
@@ -94,6 +99,14 @@ func _build_env() -> void:
 	sun.directional_shadow_max_distance = 90.0; sun.shadow_bias = 0.04; sun.shadow_normal_bias = 1.2; sun.directional_shadow_blend_splits = true
 	sun.light_volumetric_fog_energy = 1.6
 	sun.light_bake_mode = Light3D.BAKE_STATIC
+	var sk: String = Plan.meta.get("sky", "dusk")
+	if sk == "day":        # the gardens: a bright late afternoon
+		pm.energy_multiplier = 1.0; sun.light_energy = 3.0; sun.light_color = Color(1.0, 0.86, 0.68)
+		env.ambient_light_energy = 1.0; amb_base = 1.0; env.volumetric_fog_density = 0.003; cam_attr.auto_exposure_scale = 0.24
+	elif sk == "none":     # the service level: no daylight at all, cold tube light, murky air
+		pm.energy_multiplier = 0.02; sun.visible = false
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color(0.55, 0.62, 0.7)
+		env.ambient_light_energy = 0.22; amb_base = 0.22; env.volumetric_fog_density = 0.011; env.volumetric_fog_albedo = Color(0.8, 0.86, 0.9)
 
 # ---------------------------------------------------------------------------------------- materials
 func tex(name: String, kind: String) -> Texture2D:
@@ -211,9 +224,13 @@ func _build_lamps(raw: Dictionary) -> void:
 		var fx: String = l["fixture"]; var L := int(l["L"]); var I: float = l["I"]
 		var rk := "" if int(l["room"]) < 0 else String(Plan.rooms[int(l["room"])]["kind"])
 		var open := fx == "chandelier" or fx == "sconce" or fx == "wallsconce" or rk in OPEN_KINDS
-		var dy := -0.65 if fx == "ceiling" else (-0.1 if fx == "sconce" or fx == "wallsconce" else -0.5)
+		var dy := -0.65 if fx == "ceiling" else (-0.1 if fx == "sconce" or fx == "wallsconce" or fx == "tube" else (0.0 if fx == "post" else -0.5))
 		var pos := Vector3(l["x"], float(l["y"]) + dy, l["z"])
-		mm.set_instance_transform(n, Transform3D(Basis.IDENTITY, pos)); n += 1
+		mm.set_instance_transform(n, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * (0.001 if fx == "tube" else (2.2 if fx == "post" else 1.0))), pos)); n += 1
+		if fx == "tube":
+			var tb := MeshInstance3D.new(); var bm := BoxMesh.new(); bm.size = Vector3(1.25, 0.05, 0.11); tb.mesh = bm; tb.material_override = bulb_mat
+			tb.position = pos + Vector3(0, 0.07, 0); tb.rotation.y = PI / 2 if Plan.passable(L, Plan.ci(pos.x), Plan.ck(pos.z), "N") and not Plan.passable(L, Plan.ci(pos.x), Plan.ck(pos.z), "E") else 0.0
+			tb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; add_child(tb)
 		var node: Light3D
 		if fx == "ceiling" and open:
 			var sp := SpotLight3D.new(); sp.spot_range = 9.0; sp.spot_angle = 82.0; sp.spot_angle_attenuation = 0.5; sp.spot_attenuation = 1.2
@@ -221,9 +238,11 @@ func _build_lamps(raw: Dictionary) -> void:
 		else:
 			var om := OmniLight3D.new(); om.omni_attenuation = 1.3
 			om.omni_range = 22.0 if fx == "chandelier" else (11.0 if fx == "chandelier3" else (6.5 if fx != "ceiling" else 8.5))
-			node = om; node.light_energy = I * (1.4 if fx == "chandelier" else (1.5 if fx == "chandelier3" else (2.2 if fx == "ceiling" else 4.5)))
+			if fx == "tube": om.omni_range = 7.5
+			elif fx == "post": om.omni_range = 13.0
+			node = om; node.light_energy = I * (1.4 if fx == "chandelier" else (1.5 if fx == "chandelier3" else (2.2 if fx == "ceiling" else (2.6 if fx == "tube" else (3.0 if fx == "post" else 4.5)))))
 		node.position = pos + Vector3(0, -0.06, 0)
-		node.light_color = LAMP_COL if fx != "chandelier" else Color(1.0, 0.86, 0.68)
+		node.light_color = Color(0.8, 0.92, 1.0) if fx == "tube" else (LAMP_COL if fx != "chandelier" else Color(1.0, 0.86, 0.68))
 		node.light_specular = 0.6; node.shadow_enabled = false; node.shadow_bias = 0.06; node.shadow_normal_bias = 1.5
 		node.light_volumetric_fog_energy = 2.0
 		node.distance_fade_enabled = true; node.distance_fade_begin = 38.0; node.distance_fade_length = 8.0; node.distance_fade_shadow = 22.0
@@ -244,7 +263,11 @@ func _build_lamps(raw: Dictionary) -> void:
 			if r["along_k"]: p.z += e * half
 			else: p.x += e * half
 			spots.append(p)
-	spots.append(Vector3(0, 2.9, Plan.Z0 + 1.2)); spots.append(Vector3(0, 2.9, 19.0)); spots.append(Vector3(-12, 2.9, 0)); spots.append(Vector3(12, 2.9, 0))
+	if Plan.meta["name"] == "hotel":
+		spots.append(Vector3(0, 2.9, Plan.Z0 + 1.2)); spots.append(Vector3(0, 2.9, 19.0)); spots.append(Vector3(-12, 2.9, 0)); spots.append(Vector3(12, 2.9, 0))
+	else:
+		for ex: Dictionary in (Plan.meta["exits"] as Dictionary).values():
+			var nd: Array = ex["nodes"][0]; spots.append(Vector3(Plan.cx(nd[1]), nd[0] * Plan.LH + 2.9, Plan.cz(nd[2])))
 	var em := StandardMaterial3D.new(); em.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED; em.albedo_color = Color(0.25, 0.02, 0.02)
 	for p in spots:
 		var o := OmniLight3D.new(); o.position = p; o.light_color = Color(1.0, 0.12, 0.08); o.light_energy = 0.0; o.omni_range = 9.0; o.omni_attenuation = 1.1
@@ -284,7 +307,7 @@ func step(dt: float, L: int, on_ramp: bool, eye: Vector3) -> void:
 			(r["node"] as Node3D).visible = r["open"] or r["L"] == L or (on_ramp and absi(r["L"] - L) <= 1)
 		for s in signs: s["light"].light_energy = s["e"] * (0.25 + 0.75 * power)
 		# without the GI bounce (the light preset) the sky's ambient stands in for it indoors, and dies with the lamps
-		if not env.sdfgi_enabled: env.ambient_light_energy = 0.8 * (0.12 + 0.88 * power)
+		if not env.sdfgi_enabled: env.ambient_light_energy = amb_base * (0.12 + 0.88 * power)
 	if quality == "high" and Engine.get_frames_drawn() % 6 == 0: _shadow_budget(eye)
 
 func _shadow_budget(eye: Vector3) -> void:
@@ -315,10 +338,13 @@ func _build_props(raw: Dictionary) -> void:
 		var name: String = q[0]; var L := int(q[1]); var rot: float = q[4]; var sc: float = q[6] if q[6] != null else 1.0
 		var y: float = L * Plan.LH if q[5] == null else float(q[5])
 		var ri := Plan.room_at(L, Plan.ci(q[2]), Plan.ck(q[3]))
-		var open: bool = ri < 0 or String(Plan.rooms[ri]["kind"]) in OPEN_KINDS or name.contains("Chandelier_01") or name.contains("sconce")
+		var open: bool = ri < 0 or String(Plan.rooms[ri]["kind"]) in OPEN_KINDS or name.contains("Chandelier_01") or name.contains("sconce") or Plan.NL == 1
 		var base := Transform3D(Basis(Vector3.UP, rot).scaled(Vector3.ONE * sc), Vector3(q[2], y, q[3]))
 		var node: Node3D
-		if name == "__bed":
+		if name.begins_with("__") and name != "__bed":
+			node = _special(name, q); node.transform = base * node.transform if name != "__pipe" else node.transform
+			open = Plan.NL == 1
+		elif name == "__bed":
 			node = Node3D.new()
 			_box(node, Vector3(0, 0.38, 0), Vector3(1.7, 0.55, 2.1), bed_fab); _box(node, Vector3(0, 0.6, -1.05), Vector3(1.8, 1.1, 0.12), bed_wood)
 			_box(node, Vector3(-0.4, 0.72, -0.7), Vector3(0.62, 0.14, 0.4), bed_fab); _box(node, Vector3(0.4, 0.72, -0.7), Vector3(0.62, 0.14, 0.4), bed_fab)
@@ -471,3 +497,138 @@ func light_at(L: int, x: float, y: float, z: float) -> Vector2:
 	var v := Vector2(lamp, day)
 	_light_cache[key] = v
 	return v
+
+# ---------------------------------------------------------------------------------------- generated levels
+const N_FLOOR := {"field": "leafy_grass", "pavilion": "wood_floor_deck", "corridor": "concrete_floor_02", "stair": "concrete_floor_02", "boiler": "metal_plate", "plant": "metal_plate",
+	"pump": "metal_plate", "workshop": "concrete_floor_02", "laundry": "floor_tiles_06", "kitchen": "floor_tiles_06", "cold": "floor_tiles_06", "locker": "floor_tiles_06"}
+const N_WALL := {"pavilion": "white_plaster_rough_01", "corridor": "concrete_wall_008", "stair": "concrete_wall_008", "boiler": "brick_wall_001", "plant": "brick_wall_001", "pump": "brick_wall_001",
+	"workshop": "brick_wall_001", "laundry": "grey_tiles", "kitchen": "grey_tiles", "cold": "grey_tiles", "locker": "grey_tiles"}
+var _n_st := {}
+var _n_cnt := {}
+
+func _nst(name: String) -> SurfaceTool:
+	if not _n_st.has(name):
+		var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES); _n_st[name] = st; _n_cnt[name] = 0
+	return _n_st[name]
+
+func _nquad(name: String, p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, n: Vector3, rep := 2.0) -> void:
+	var st := _nst(name); var base: int = _n_cnt[name]
+	for p: Vector3 in [p0, p1, p2, p3]:
+		var uv := Vector2(p.x, p.z) if absf(n.y) > 0.5 else (Vector2(p.z, -p.y) if absf(n.x) > 0.5 else Vector2(p.x, -p.y))
+		st.set_normal(n); st.set_uv(uv / rep); st.add_vertex(p)
+	var flip := (p1 - p0).cross(p2 - p0).dot(n) > 0.0     # Godot's front faces wind clockwise
+	for q: int in ([0, 2, 1, 0, 3, 2] if flip else [0, 1, 2, 0, 2, 3]): st.add_index(base + q)
+	_n_cnt[name] = base + 4
+
+func _nbox(name: String, c: Vector3, size: Vector3, rep := 2.0) -> void:
+	var h := size / 2.0
+	for ax in 3:
+		for sg: float in [-1.0, 1.0]:
+			var n := Vector3.ZERO; n[ax] = sg
+			var u := Vector3.ZERO; u[(ax + 1) % 3] = h[(ax + 1) % 3]
+			var v := Vector3.ZERO; v[(ax + 2) % 3] = h[(ax + 2) % 3]
+			var o := c + n * h[ax]
+			_nquad(name, o - u - v, o + u - v, o + u + v, o - u + v, n, rep)
+
+## A piece of wall on an edge: from y0 to y1, between a and b along the edge (0..C), of a thickness.
+func _nwall(name: String, east: bool, ex: float, ez: float, y0: float, y1: float, a: float, b: float, thick: float, rep := 2.0) -> void:
+	if b - a < 0.01 or y1 - y0 < 0.01: return
+	var mid := (a + b) / 2.0 - Plan.C / 2.0
+	var c := Vector3(ex, (y0 + y1) / 2.0, ez + mid) if east else Vector3(ex + mid, (y0 + y1) / 2.0, ez)
+	_nbox(name, c, Vector3(thick, y1 - y0, b - a) if east else Vector3(b - a, y1 - y0, thick), rep)
+
+func _build_native() -> void:
+	var C := Plan.C
+	for L in Plan.NL:
+		var y0 := L * Plan.LH
+		for k in Plan.NZ:
+			for i in Plan.NX:
+				var kd := Plan.kind_at(L, i, k)
+				if kd != 1 and kd != 3: continue
+				var ri := Plan.room_at(L, i, k); var rk: String = Plan.rooms[ri]["kind"] if ri >= 0 else ""
+				var x0 := Plan.X0 + i * C; var z0 := Plan.Z0 + k * C
+				if kd == 1:
+					var fm: String = N_FLOOR.get(rk, "concrete_floor_painted")
+					_nquad(fm, Vector3(x0, y0, z0), Vector3(x0 + C, y0, z0), Vector3(x0 + C, y0, z0 + C), Vector3(x0, y0, z0 + C), Vector3.UP, 3.0 if rk == "field" else 2.0)
+				var lower_ramp: bool = kd == 3 and Plan.ramps[Plan.ramp_at(L, i, k)]["L"] == L
+				if ri >= 0 and not Plan.rooms[ri]["outdoor"] and not lower_ramp:
+					var yc := y0 + Plan.CEIL
+					_nquad("dark_paneled_wood" if rk == "pavilion" else "painted_concrete", Vector3(x0, yc, z0), Vector3(x0 + C, yc, z0), Vector3(x0 + C, yc, z0 + C), Vector3(x0, yc, z0 + C), Vector3.DOWN)
+	for key: int in Plan.edges:
+		var ty: int = Plan.edges[key]
+		var k := (key >> 1) % 32 - 1; var i := ((key >> 1) / 32) % 32 - 1; var L := (key >> 1) / 1024; var east := (key & 1) == 0
+		var j := i + (1 if east else 0); var m := k + (0 if east else 1)
+		var ra := Plan.room_at(L, i, k) if Plan.walkable(L, i, k) else -1; var rb := Plan.room_at(L, j, m) if Plan.walkable(L, j, m) else -1
+		var in_a: bool = ra >= 0 and not Plan.rooms[ra]["outdoor"]; var in_b: bool = rb >= 0 and not Plan.rooms[rb]["outdoor"]
+		var indoor := in_a or in_b
+		var rk: String = Plan.rooms[ra]["kind"] if in_a and (not in_b or Plan.rooms[ra]["kind"] != "corridor") else (Plan.rooms[rb]["kind"] if in_b else "")
+		var wm: String = N_WALL.get(rk, "painted_concrete") if indoor else ("forest_leaves_02" if (ra >= 0 and rb >= 0) else "rustic_stone_wall")
+		var ex := (Plan.X0 + (i + 1) * C) if east else Plan.cx(i); var ez := Plan.cz(k) if east else (Plan.Z0 + (k + 1) * C)
+		var y0 := L * Plan.LH
+		var top := y0 + (Plan.LH if L < Plan.NL - 1 else Plan.CEIL + 0.1) if indoor else y0 + (2.3 if wm == "forest_leaves_02" else 3.0)
+		var th := 0.16 if indoor else (0.8 if wm == "forest_leaves_02" else 0.5)
+		match ty:
+			Plan.WALL: _nwall(wm, east, ex, ez, y0, top, 0.0, C, th)
+			Plan.DOOR, Plan.SDOOR:
+				_nwall(wm, east, ex, ez, y0, top, 0.0, 0.39, th); _nwall(wm, east, ex, ez, y0, top, C - 0.39, C, th); _nwall(wm, east, ex, ez, y0 + 2.3, top, 0.39, C - 0.39, th)
+				if ty == Plan.SDOOR:    # a steel frame so the shutter reads as a different kind of door
+					_nwall("steel", east, ex, ez, y0, y0 + 2.34, 0.33, 0.39, th + 0.08); _nwall("steel", east, ex, ez, y0, y0 + 2.34, C - 0.39, C - 0.33, th + 0.08); _nwall("steel", east, ex, ez, y0 + 2.3, y0 + 2.38, 0.33, C - 0.33, th + 0.08)
+			Plan.WINDOW:
+				_nwall(wm, east, ex, ez, y0, y0 + 0.95, 0.0, C, th); _nwall(wm, east, ex, ez, y0 + 2.65, top, 0.0, C, th); _nwall("glass", east, ex, ez, y0 + 0.95, y0 + 2.65, 0.0, C, 0.02)
+			Plan.RAIL: _nwall("rustic_stone_wall" if not indoor else "steel", east, ex, ez, y0, y0 + 0.95, 0.0, C, 0.34 if not indoor else 0.06)
+			Plan.GLASS: _nwall("glass", east, ex, ez, y0, top, 0.0, C, 0.02)
+	# flights: forty shallow steps each, solid underneath
+	for r: Dictionary in Plan.ramps:
+		var ln: Array = r["lane"]; var y0: float = r["L"] * Plan.LH; var n := int(round(float(r["len"]) / 0.3))
+		var xa: float = Plan.X0 + int(ln[0]) * C; var xb: float = Plan.X0 + (int(ln[2]) + 1) * C; var za: float = Plan.Z0 + int(ln[1]) * C; var zb: float = Plan.Z0 + (int(ln[3]) + 1) * C
+		for st in n:
+			var u0: float = float(r["s0"]) + r["dir"] * st * 0.3; var u1: float = u0 + r["dir"] * 0.3; var hgt := (st + 1) * Plan.LH / n
+			if r["along_k"]: _nbox("concrete_floor_02", Vector3((xa + xb) / 2.0, y0 + hgt / 2.0, (u0 + u1) / 2.0), Vector3(xb - xa, hgt, 0.3))
+			else: _nbox("concrete_floor_02", Vector3((u0 + u1) / 2.0, y0 + hgt / 2.0, (za + zb) / 2.0), Vector3(0.3, hgt, zb - za))
+	var solid := ArrayMesh.new(); var glass := ArrayMesh.new()
+	for name: String in _n_st:
+		var st: SurfaceTool = _n_st[name]; st.generate_tangents()
+		var target := glass if name == "glass" else solid
+		st.commit(target)
+		var mat: Material = plain(name) if name in ["glass", "steel", "brass", "trim"] else surf_mat(name, Color(0.5, 0.68, 0.38) if name == "forest_leaves_02" else Color.WHITE)
+		target.surface_set_material(target.get_surface_count() - 1, mat)
+	var mi := MeshInstance3D.new(); mi.mesh = solid; mi.name = "Building"; mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED; add_child(mi)
+	if glass.get_surface_count() > 0:
+		var gi := MeshInstance3D.new(); gi.mesh = glass; gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; gi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED; add_child(gi)
+	_n_st.clear(); _n_cnt.clear()
+
+func _build_native_outside() -> void:
+	if Plan.meta.get("sky", "") == "day":      # the country beyond the garden wall
+		var m := MeshInstance3D.new(); var pl := PlaneMesh.new(); pl.size = Vector2(700, 700); m.mesh = pl
+		m.material_override = surf_mat("leafy_grass", Color(0.8, 0.85, 0.7), Vector3(180, 180, 1)); m.position = Vector3(0, -0.04, 0); add_child(m)
+	var cols := {"green": Color(0.15, 1.0, 0.45), "pink": Color(1.0, 0.16, 0.55), "cyan": Color(0.1, 0.9, 1.0), "amber": Color(1.0, 0.6, 0.12)}
+	for q: Array in Plan.meta.get("signs", []): neon(q[0], Vector3(q[1], q[2], q[3]), q[4], cols[q[5]], q[6], "Rajdhani-SemiBold", 1.2)
+
+func _cyl(parent: Node3D, r0: float, r1: float, h: float, pos: Vector3, mat: Material, shadow := true) -> MeshInstance3D:
+	var m := MeshInstance3D.new(); var c := CylinderMesh.new(); c.bottom_radius = r0; c.top_radius = r1; c.height = h; c.radial_segments = 12; c.rings = 1
+	m.mesh = c; m.material_override = mat; m.position = pos; parent.add_child(m)
+	if not shadow: m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return m
+
+func _special(name: String, q: Array) -> Node3D:
+	var n := Node3D.new()
+	if name == "__tree":
+		var bark := StandardMaterial3D.new(); bark.albedo_color = Color(0.25, 0.18, 0.12); bark.roughness = 0.95
+		var leaf := surf_mat("forest_leaves_02", Color(0.42, 0.62, 0.3), Vector3(3, 3, 1))
+		_cyl(n, 0.26, 0.16, 3.4, Vector3(0, 1.7, 0), bark)
+		for c: Array in [[0.0, 4.3, 0.0, 1.9], [1.1, 3.8, 0.4, 1.3], [-0.9, 3.9, -0.6, 1.4], [0.2, 5.2, -0.3, 1.3], [-0.3, 3.7, 1.0, 1.2]]:
+			var m := MeshInstance3D.new(); var sp := SphereMesh.new(); sp.radius = c[3]; sp.height = c[3] * 1.7; sp.radial_segments = 12; sp.rings = 6
+			m.mesh = sp; m.material_override = leaf; m.position = Vector3(c[0], c[1], c[2]); n.add_child(m)
+	elif name == "__fountain":
+		var stone := surf_mat("rustic_stone_wall")
+		_cyl(n, 1.9, 1.9, 0.6, Vector3(0, 0.3, 0), stone); _cyl(n, 0.3, 0.22, 1.5, Vector3(0, 0.95, 0), stone); _cyl(n, 0.7, 0.3, 0.2, Vector3(0, 1.75, 0), stone)
+		var w := StandardMaterial3D.new(); w.albedo_color = Color(0.08, 0.22, 0.28); w.roughness = 0.05; w.metallic_specular = 0.8
+		_cyl(n, 1.7, 1.7, 0.02, Vector3(0, 0.62, 0), w, false)
+	elif name == "__lamppost":
+		_cyl(n, 0.07, 0.05, 3.3, Vector3(0, 1.65, 0), plain("dark"))
+	elif name == "__pipe":     # [name, L, x, z, rot, y, length]: two pipes side by side under the ceiling
+		for o: Array in [[0.0, 0.0, 0.09, Color(0.5, 0.52, 0.55)], [0.24, -0.04, 0.06, Color(0.55, 0.16, 0.12)]]:
+			var pm := StandardMaterial3D.new(); pm.albedo_color = o[3]; pm.metallic = 0.7; pm.roughness = 0.45
+			var m := _cyl(n, o[2], o[2], float(q[6]), Vector3(o[0], o[1], 0), pm, false); m.rotation.x = PI / 2
+		n.position = Vector3(q[2], q[5], q[3]); n.rotation.y = q[4]
+	return n

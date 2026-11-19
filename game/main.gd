@@ -3,8 +3,9 @@ extends Node3D
 ##   bot=1 [seed=N]                       watch the simulated player
 ##   scan=<prefix> seed=N frames=M        BOLDBLASTER harness: 384x288 render, 192x144 frames + log + events
 ##   shots=<name>,<x>,<y>,<z>,<yaw>,<pitch>[,<ortho size>];...   stills for checking the look
-##   q=high|scan   people=1 (stage some people for stills)   dark=1
+##   level=hotel|gardens|service   q=high|scan   people=1 (stage some people for stills)   dark=1
 
+static var level_name := ""      # survives a scene reload: the title card switches level by reloading
 var level: Level
 var game: Game
 var view: View
@@ -30,7 +31,9 @@ func _ready() -> void:
 		var kv := a.split("=", true, 1)
 		args[kv[0].trim_prefix("--")] = kv[1] if kv.size() > 1 else "1"
 	mode = "shots" if args.has("shots") else ("scan" if args.has("scan") else ("bot" if args.has("bot") else "play"))
-	Plan.load_level()
+	if level_name == "": level_name = args.get("level", "hotel")
+	if level_name == "hotel": Plan.load_level()
+	else: Plan.load_dict(LevelGen.make(level_name))
 	level = Level.new(); add_child(level)
 	level.build(args.get("q", "scan" if mode == "scan" else "high"))
 	game = Game.new(); add_child(game); game.setup(level, true)
@@ -80,7 +83,10 @@ func _unhandled_input(e: InputEvent) -> void:
 		playing = true; hud.show_card(false); Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif e is InputEventKey and (e as InputEventKey).pressed and not (e as InputEventKey).echo:
 		var k := (e as InputEventKey).physical_keycode
-		if k == KEY_ESCAPE:
+		if not playing and k in [KEY_1, KEY_2, KEY_3]:      # on the title card: choose where to play
+			var want: String = ["hotel", "gardens", "service"][[KEY_1, KEY_2, KEY_3].find(k)]
+			if want != level_name: level_name = want; get_tree().reload_current_scene()
+		elif k == KEY_ESCAPE:
 			playing = false; hud.show_card(true); Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		elif k == KEY_F11:
 			var w := get_window(); w.mode = Window.MODE_WINDOWED if w.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
@@ -167,7 +173,7 @@ func _shots() -> void:
 		var f := s.split(",")
 		var p := game.player
 		p.pos = Vector3(float(f[1]), float(f[2]) - Game.EYE, float(f[3])); p.yaw = deg_to_rad(float(f[4])); p.pitch = deg_to_rad(float(f[5]))
-		p.L = clampi(int(floor((p.pos.y + 0.5) / Plan.LH)), 0, 2)
+		p.L = clampi(int(floor((p.pos.y + 0.5) / Plan.LH)), 0, Plan.NL - 1)
 		if f.size() > 6: view.cam.projection = Camera3D.PROJECTION_ORTHOGONAL; view.cam.size = float(f[6])
 		else: view.cam.projection = Camera3D.PROJECTION_PERSPECTIVE
 		if args.has("people"): _stage(p)

@@ -103,7 +103,8 @@ func reset(seed_value := 1) -> void:
 	actors.clear(); items.clear(); group_rec.clear()
 	rng.seed = seed_ * 7919 + 13
 	t = 0.0; serial = 0; groups = 0
-	player = Player.new(); player.pos = Vector3(Plan.cx(13) + 1.0, 0, Plan.cz(5)); player.yaw = PI
+	var sp: Array = Plan.meta["spawn"]
+	player = Player.new(); player.L = int(sp[0]); player.pos = Vector3(sp[1], int(sp[0]) * Plan.LH, sp[2]); player.yaw = sp[3]
 	power = 1.0; dark_until = 0.0; pending_dark = null
 	score = {"rescued": 0, "wrong": 0, "hostiles": 0}
 	risk.clear()
@@ -142,7 +143,7 @@ func new_objective() -> void:
 	var cands: Array = []
 	for r in Plan.rooms:
 		var kd: String = r["kind"]
-		if r["L"] >= 1 and (kd.begins_with("guest") or kd == "suite") and (objective == null or r["id"] != objective["room"]): cands.append(r)
+		if r["L"] >= int(Plan.meta["objective_min_L"]) and kd in Plan.meta["objective_kinds"] and (objective == null or r["id"] != objective["room"]): cands.append(r)
 	var r: Dictionary = cands[rng.randi_range(0, cands.size() - 1)]
 	var rc: Array = r["rect"]
 	var i := 0; var k := 0; var n := 0
@@ -154,19 +155,25 @@ func new_objective() -> void:
 	g.objective = true; g.group = grp["id"]; grp["n"] = 1
 	actors.append(g)
 	n_obj += 1
-	objective = {"room": r["id"], "name": r["name"], "guest": g, "phase": "find", "t0": t, "exit": "terrace" if (n_obj % 5) in [1, 2, 4] else "front"}
+	objective = {"room": r["id"], "name": r["name"], "guest": g, "phase": "find", "t0": t, "exit": Plan.meta["exit_cycle"][n_obj % (Plan.meta["exit_cycle"] as Array).size()]}
 	log["objectives"].append([t, "new", r["id"], r["L"], i, k, g.id, objective["exit"]])
 
 func extraction_at(L: int, x: float, z: float) -> bool:
-	if L != 0 or objective == null: return false
+	if objective == null: return false
+	var rc: Array = Plan.meta["exits"][objective["exit"]]["rect"]
 	var i := Plan.ci(x); var k := Plan.ck(z)
-	if objective["exit"] == "front": return k <= 0 and i >= 12 and i <= 15
-	var r := Plan.room_at(0, i, k)
-	return r >= 0 and Plan.rooms[r]["outdoor"] and k >= 25
+	return L == int(rc[0]) and i >= int(rc[1]) and k >= int(rc[2]) and i <= int(rc[3]) and k <= int(rc[4])
 
 func exit_nodes() -> Array:
-	if objective and objective["exit"] == "front": return [Plan.node_id(0, 13, 0), Plan.node_id(0, 14, 0)]
-	return [Plan.node_id(0, 12, 25), Plan.node_id(0, 15, 25)]
+	var out: Array = []
+	var ex: String = objective["exit"] if objective else (Plan.meta["exit_cycle"][0] as String)
+	for q: Array in Plan.meta["exits"][ex]["nodes"]: out.append(Plan.node_id(int(q[0]), int(q[1]), int(q[2])))
+	return out
+
+func exit_label() -> String: return Plan.meta["exits"][objective["exit"]]["label"] if objective else ""
+func exit_pos() -> Vector3:
+	var q: Array = Plan.meta["exits"][objective["exit"]]["nodes"][0]
+	return Vector3(Plan.cx(int(q[1])), int(q[0]) * Plan.LH, Plan.cz(int(q[2])))
 
 # ---------------------------------------------------------------------------------- the step
 func step(dt: float, inp: Inp) -> void:
@@ -195,8 +202,8 @@ func step(dt: float, inp: Inp) -> void:
 
 func surface() -> String:
 	var k := Plan.room_kind(player.L, Plan.ci(player.pos.x), Plan.ck(player.pos.z))
-	if k in ["hall", "gallery", "guestA", "suite"]: return "carpet"
-	return "wood" if k in ["terrace", "bar", "library", "ballroom", "guestB"] else "hard"
+	if k in ["hall", "gallery", "guestA", "suite", "field"]: return "carpet"
+	return "wood" if k in ["terrace", "bar", "library", "ballroom", "guestB", "pavilion"] else "hard"
 
 func step_player(dt: float, inp: Inp) -> void:
 	var p := player
@@ -359,7 +366,7 @@ func step_actors(dt: float) -> void:
 		a.speed = 0.0
 		if a.state == "approach" or a.state == "pass":
 			var lead: Actor = a.leader if (a.leader and a.leader.alive and a.leader.state == a.state) else null
-			var stop_d := 12.0 if a.hostile else 6.5
+			var stop_d: float = float(Plan.meta["stop_hostile"]) if a.hostile else 6.5
 			if a.state == "approach" and ((sees and d < stop_d) or (a.leader and lead == null) or d < 4.0 or a.t > 16.0):
 				a.state = ("alert" if sees else "idle") if a.hostile else "idle"; a.alert_t = t
 			elif a.state == "pass" and (a.ri >= a.route.size() - 1 and lead == null and Vector2(a.route[-1][1] - a.pos.x, a.route[-1][2] - a.pos.z).length() < 0.6):
@@ -435,7 +442,8 @@ func step_director(dt: float, inp: Inp) -> void:
 	var p := player
 	if p.hp <= 0.0:
 		log["deaths"].append([t]); p.lives += 1
-		p.hp = 100.0; p.ammo = 12; p.reserve = maxi(p.reserve, 36); p.pos = Vector3(Plan.cx(13 + rng.randi_range(0, 1)), 0, Plan.cz(4)); p.L = 0; p.yaw = PI; p.pitch = 0.0; p.trail.clear(); p.ramp_from = null
+		p.hp = 100.0; p.ammo = 12; p.reserve = maxi(p.reserve, 36); var rs: Array = Plan.meta["respawn"][rng.randi_range(0, (Plan.meta["respawn"] as Array).size() - 1)]
+		p.L = int(rs[0]); p.pos = Vector3(rs[1], p.L * Plan.LH, rs[2]); p.yaw = Plan.meta["spawn"][3]; p.pitch = 0.0; p.trail.clear(); p.ramp_from = null
 		for a in actors:
 			if a.hostile: a.state = "idle"
 		if objective and objective["phase"] == "escort": objective["guest"].escort = false; objective["guest"].pose = "hands"; objective["phase"] = "find"
@@ -448,8 +456,8 @@ func step_director(dt: float, inp: Inp) -> void:
 		if g.L == p.L and Vector2(g.pos.x - p.pos.x, g.pos.z - p.pos.z).length() < 2.6 and inp.use:
 			o["phase"] = "escort"; g.escort = true; g.pose = "none"; log["pickups"].append([t, o["room"], g.id])
 			if fx: fx.pickup()
-			msg("WITH YOU. OUT BY THE %s." % ("FRONT DOORS" if o["exit"] == "front" else "POOL TERRACE"))
-			if rng.randf() < 0.85: pending_dark = t + 1.5 + rng.randf() * 2.0
+			msg("WITH YOU. OUT BY THE %s." % exit_label())
+			if rng.randf() < float(Plan.meta["blackout_p"]): pending_dark = t + 1.5 + rng.randf() * 2.0
 	if o and o["phase"] == "escort" and extraction_at(p.L, p.pos.x, p.pos.z):
 		score["rescued"] += 1; log["objectives"].append([t, "rescued", o["room"]]); msg("GUEST OUT SAFE")
 		if fx: fx.rescued()
@@ -457,7 +465,7 @@ func step_director(dt: float, inp: Inp) -> void:
 	# the power goes a moment after you find the guest; it comes back at the stairs
 	if pending_dark != null and t > pending_dark and power > 0.5:
 		pending_dark = null
-		if Plan.ramp_at(p.L, Plan.ci(p.pos.x), Plan.ck(p.pos.z)) < 0 and p.L > 0:
+		if Plan.ramp_at(p.L, Plan.ci(p.pos.x), Plan.ck(p.pos.z)) < 0 and p.L >= int(Plan.meta["blackout_min_L"]):
 			power = 0.0; dark_t0 = t; dark_L = p.L; dark_until = t + 22.0
 			log["blackouts"].append([t, "off", dark_until]); msg("THE POWER IS OUT")
 			if level: level.set_power(false)
@@ -529,11 +537,12 @@ func spawn_group() -> bool:
 	var cands: Array = []; var tot := 0.0
 	for n: int in dist:
 		var d: int = dist[n]
-		if d < 3 or d > 10 or Plan.node_l(n) != p.L: continue
+		if d < 3 or d > int(Plan.meta["spawn_cells"]) or Plan.node_l(n) != p.L: continue
 		var i := Plan.node_i(n); var k := Plan.node_k(n)
 		if Plan.kind_at(p.L, i, k) != 1 or blocked_cell(p.L, i, k): continue
 		var x := Plan.cx(i); var z := Plan.cz(k); var dx := x - p.pos.x; var dz := z - p.pos.z; var e := sqrt(dx * dx + dz * dz)
-		if Plan.los(p.L, p.pos.x, p.pos.z, x, z): continue
+		# out of sight; on open ground, far enough away that someone walking into view is not a surprise
+		if Plan.los(p.L, p.pos.x, p.pos.z, x, z) and (float(Plan.meta["spawn_far"]) <= 0.0 or e < float(Plan.meta["spawn_far"])): continue
 		var crowded := false
 		for a in actors:
 			if a.alive and a.L == p.L and Vector2(a.pos.x - x, a.pos.z - z).length() < 4.0: crowded = true

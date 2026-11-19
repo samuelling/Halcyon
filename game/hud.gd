@@ -55,7 +55,7 @@ func setup(g: Game, lens := true) -> void:
 	card = ColorRect.new(); (card as ColorRect).color = Color(0.01, 0.015, 0.03, 0.72); card.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(card)
 	var title := _label(card, f_neon, 150, pink, Control.PRESET_CENTER, Vector2(-600, -300), HORIZONTAL_ALIGNMENT_CENTER); title.custom_minimum_size = Vector2(1200, 0); title.text = "HALCYON"
 	card_sub = _label(card, f_med, 30, Color(1, 1, 1, 0.9), Control.PRESET_CENTER, Vector2(-600, -90), HORIZONTAL_ALIGNMENT_CENTER); card_sub.custom_minimum_size = Vector2(1200, 0)
-	card_sub.text = "Gunmen hold the hotel. Find each guest upstairs and walk them out.\nOnly shoot who is armed: look at the hands, not the clothes.\n\nWASD move    SHIFT run    MOUSE look    LEFT fire    RIGHT aim\nR reload    E come with me    F torch    ESC pause    F11 full screen\n\nCLICK TO PLAY"
+	card_sub.text = "Gunmen hold the hotel. Find each guest upstairs and walk them out.\nOnly shoot who is armed: look at the hands, not the clothes.\n\nWASD move    SHIFT run    MOUSE look    LEFT fire    RIGHT aim\nR reload    E come with me    F torch    ESC pause    F11 full screen\n\n1 the hotel    2 the gardens    3 the service level        now: %s\n\nCLICK TO PLAY" % Plan.meta["title"]
 	card.visible = false
 
 func msg(s: String) -> void:
@@ -89,13 +89,13 @@ func update(_dt: float) -> void:
 	if o:
 		var find: bool = o["phase"] == "find"
 		var g: Actor = o["guest"]
-		var tgt := g.pos if find else (Vector3(0, 0, Plan.Z0 + 1.0) if o["exit"] == "front" else Vector3(0, 0, 31.0))
+		var tgt := g.pos if find else game.exit_pos()
 		var tl := g.L if find else 0
 		var d := Vector2(tgt.x - p.pos.x, tgt.z - p.pos.z).length()
 		var rel := wrapf(atan2(-(tgt.x - p.pos.x), -(tgt.z - p.pos.z)) - p.yaw, -PI, PI)
 		var arrow := "▲" if absf(rel) < 0.4 else ("◀" if rel > 0.0 and absf(rel) < 2.4 else ("▶" if rel < 0.0 and absf(rel) < 2.4 else "▼"))
 		var fl := "" if tl == p.L else ("   UP %d" % (tl - p.L) if tl > p.L else "   DOWN %d" % (p.L - tl))
-		obj.text = ("FIND THE GUEST  ·  %s" % String(o["name"]).to_upper()) if find else ("WALK THEM OUT  ·  %s" % ("FRONT DOORS" if o["exit"] == "front" else "POOL TERRACE"))
+		obj.text = ("FIND THE GUEST  ·  %s" % String(o["name"]).to_upper()) if find else ("WALK THEM OUT  ·  %s" % game.exit_label())
 		obj_sub.text = "%s  %d m%s" % [arrow, int(d), fl]
 		if find and g.L == p.L and d < 2.6: prompt.text = "E   COME WITH ME"
 	else:

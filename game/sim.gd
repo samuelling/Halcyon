@@ -5,7 +5,9 @@ func _init() -> void:
 	var args := {}
 	for a in OS.get_cmdline_user_args():
 		var kv := a.split("=", true, 1); args[kv[0]] = kv[1] if kv.size() > 1 else "1"
-	Plan.load_level()
+	var lvl: String = args.get("level", "hotel")
+	if lvl == "hotel": Plan.load_level()
+	else: Plan.load_dict(LevelGen.make(lvl))
 	var lv := Level.new(); lv.quality = "none"; lv.lamps_only(Plan.raw)
 	var g := Game.new(); g.setup(lv, false)
 	g.enc_gate = float(args.get("gate", str(g.enc_gate))); g.enc_min = float(args.get("emin", str(g.enc_min))); g.enc_span = float(args.get("espan", str(g.enc_span))); g.enc_serial = args.get("serial", "1" if g.enc_serial else "0") == "1"

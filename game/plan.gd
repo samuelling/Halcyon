@@ -34,9 +34,25 @@ static var rooms: Array = []
 static var obstacles: Array = [] # {L, x, z, r}
 static var raw := {}            # the whole level.json
 
+## What the director needs to know about a level beyond its plan. The hotel's values are the defaults.
+static var meta := {}
+const HOTEL_META := {
+	"name": "hotel", "title": "THE HOTEL", "spawn": [0, 0.0, -9.0, PI], "respawn": [[0, -1.0, -11.0], [0, 1.0, -11.0]],
+	"exits": {"front": {"label": "FRONT DOORS", "rect": [0, 12, 0, 15, 0], "nodes": [[0, 13, 0], [0, 14, 0]]},
+		"terrace": {"label": "POOL TERRACE", "rect": [0, 4, 25, 23, 27], "nodes": [[0, 12, 25], [0, 15, 25]]}},
+	"exit_cycle": ["front", "terrace", "terrace", "front", "terrace"],
+	"objective_kinds": ["guestA", "guestB", "suite"], "objective_min_L": 1,
+	"blackout_p": 0.85, "blackout_min_L": 1, "spawn_far": 0.0, "spawn_cells": 10, "stop_hostile": 12.0, "sky": "dusk"}
+
 static func load_level(path := "res://level/level.json") -> Dictionary:
 	var txt := FileAccess.get_file_as_string(path)
-	raw = JSON.parse_string(txt)
+	return load_dict(JSON.parse_string(txt))
+
+## A level as a dictionary: the hotel's exported JSON, or one built by LevelGen (which adds "meta" and has no "surfaces").
+static func load_dict(d: Dictionary) -> Dictionary:
+	raw = d
+	meta = HOTEL_META.duplicate(true)
+	for k in (d.get("meta", {}) as Dictionary): meta[k] = d["meta"][k]
 	var p: Dictionary = raw["plan"]
 	C = p["C"]; NX = int(p["NX"]); NZ = int(p["NZ"]); NL = int(p["NL"]); LH = p["LH"]; CEIL = p["CEIL"]; X0 = p["X0"]; Z0 = p["Z0"]
 	NN = NL * NX * NZ
@@ -44,11 +60,12 @@ static func load_level(path := "res://level/level.json") -> Dictionary:
 	for L in NL:
 		kind.append(PackedInt32Array(p["kind"][L])); room.append(PackedInt32Array(p["room"][L])); ramp.append(PackedInt32Array(p["ramp"][L]))
 	for e in p["edges"]:
-		edges[_key_str(e[0])] = ETYPE[e[1]]
-	for d in p["doors"]:
-		var dd := {"id": int(d["id"]), "L": int(d["L"]), "i": int(d["i"]), "k": int(d["k"]), "s": d["s"], "name": d["name"], "open": true, "keys": [], "met_at": -1e9}
-		for ks in d["keys"]:
-			var kk := _key_str(ks); dd["keys"].append(kk); edge_door[kk] = dd
+		edges[_key_str(e[0]) if e[0] is String else int(e[0])] = ETYPE[e[1]] if e[1] is String else int(e[1])
+	for dr in p["doors"]:
+		var dd := {"id": int(dr["id"]), "L": int(dr["L"]), "i": int(dr["i"]), "k": int(dr["k"]), "s": dr["s"], "name": dr["name"], "open": true, "keys": [], "met_at": -1e9}
+		for ks in dr["keys"]:
+			var kk: int = _key_str(ks) if ks is String else int(ks)
+			dd["keys"].append(kk); edge_door[kk] = dd
 		doors.append(dd)
 	ramps = p["ramps"]
 	for r in ramps:

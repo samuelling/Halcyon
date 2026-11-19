@@ -153,7 +153,7 @@ func update(dt: float) -> void:
 	var p := game.player
 	var out := Plan.outdoor_at(p.L, p.pos.x, p.pos.z)
 	var near_sea := clampf((p.pos.z - 4.0) / 16.0, 0.0, 1.0)
-	_fade(loops["sea"], -6.0 if out else lerpf(-40.0, -22.0, near_sea), dt)
+	_fade(loops["sea"], (-6.0 if out else lerpf(-40.0, -22.0, near_sea)) if Plan.meta["name"] == "hotel" else -60.0, dt)   # the sea is the hotel's
 	_fade(loops["room"], -40.0 if out or game.power < 0.5 else -20.0, dt)
 	_fade(loops["drone"], -14.0 if game.power < 0.5 else -60.0, dt)
 	if p.hp < 40.0:
